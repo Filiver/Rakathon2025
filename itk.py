@@ -19,24 +19,47 @@ ROI_intrested = [
 ]
 
 
+def parse_report_file(report_path):
+    import re
+    rs_to_cts = {}
+    current_rs = None
+
+    with open(report_path, "r") as f:
+        lines = f.readlines()
+
+    for i, line in enumerate(lines):
+        line = line.strip()
+        rs_match = re.search(r'RS File:\s*(.+\.dcm)', line)
+        if rs_match:
+            current_rs = rs_match.group(1)
+            rs_to_cts[current_rs] = []
+        elif "Files (Count:" in line and current_rs:
+            ct_files = re.findall(r'(CT\.[^,\s]+\.dcm)', line)
+            rs_to_cts[current_rs].extend(ct_files)
+
+    print(f"Found {len(rs_to_cts)} RS files with CT references.")
+    return rs_to_cts
+
+
 def load_rtstruct_contours(rtstruct_path):
     rs = pydicom.dcmread(rtstruct_path)
 
-    # Map ROINumber → ROIName
     roi_names = {}
     for item in rs.StructureSetROISequence:
         if hasattr(item, "ROINumber") and hasattr(item, "ROIName"):
             roi_names[item.ROINumber] = item.ROIName
 
-    # Map SOPInstanceUID → list of (ROIName, coordinates)
     contour_map = {}
 
     for roi in rs.ROIContourSequence:
         roi_number = roi.ReferencedROINumber
-        roi_name = roi_names.get(roi_number, f"ROI_{roi_number}")
-        roi_name = roi_name.lower()
+        roi_name = roi_names.get(roi_number, f"ROI_{roi_number}").lower()
+
         if not any(pattern.match(roi_name) for pattern in ROI_intrested):
             continue
+
+        if not hasattr(roi, "ContourSequence"):
+            continue  # Skip if there's no ContourSequence
 
         for contour in roi.ContourSequence:
             if not hasattr(contour, "ContourImageSequence"):
@@ -136,7 +159,7 @@ def generate_volume_point_cloud(ct_datasets, rgb=True, mask=False):
         print(f"xx: {xx.shape}, yy: {yy.shape}")
 
         coords_x = origin[0] + xx * spacing[0]
-        coords_y = origin[1] + (rows - 1 - yy) * spacing[1]  # flipped
+        coords_y = origin[1] + yy * spacing[1]  # flipped
         coords_z = np.full_like(coords_x, origin[2])
 
         coords = np.stack((coords_x, coords_y, coords_z), axis=-1)
@@ -226,45 +249,6 @@ def generate_point_cloud(ds, rgb=True):
         return points  # shape: [N, 3]
 
 
-def plot_ct_with_contours(ds, contours, img_dir, txt_dir):
-    img = ds.pixel_array.astype(np.int16)
-    img = np.clip((img + 1000) / 2000 * 255, 0, 255).astype(np.uint8)
-
-    spacing = list(ds.PixelSpacing) + [ds.SliceThickness]
-    origin = np.array(ds.ImagePositionPatient)
-
-    fig, ax = plt.subplots(figsize=(6, 6))
-    ax.imshow(img, cmap="gray")
-
-    txt_lines = []
-
-    for roi_name, coords in contours:
-        ij = ((coords[:, :2] - origin[:2]) / spacing[:2]).astype(int)
-        ax.plot(ij[:, 0], ij[:, 1], label=roi_name, linewidth=1)
-
-        points_str = " ".join(f"{x},{y}" for x, y in ij)
-        txt_lines.append(f"{roi_name}: {points_str}")
-
-    if contours:
-        ax.legend(fontsize="x-small", loc="lower right")
-
-    ax.axis("off")
-    plt.title(f"SOP UID: {ds.SOPInstanceUID}")
-
-    # Output paths
-    png_path = os.path.join(img_dir, f"{ds.SOPInstanceUID}.png")
-    txt_path = os.path.join(txt_dir, f"{ds.SOPInstanceUID}.txt")
-
-    plt.savefig(png_path, bbox_inches="tight", pad_inches=0)
-    plt.close()
-
-    with open(txt_path, "w") as f:
-        f.write("\n".join(txt_lines))
-
-    print(f"Saved image: {png_path}")
-    print(f"Saved contours: {txt_path}")
-
-
 def process_all_rs(directory, output_dir="plots"):
     img_dir = os.path.join(output_dir, "imgs")
     txt_dir = os.path.join(output_dir, "txt")
@@ -279,7 +263,6 @@ def process_all_rs(directory, output_dir="plots"):
     print(f"🧠 Indexed {len(sop_to_ct)} CT files.")
 
     for rs_path in rtstruct_files:
-        continue
         try:
             print(f"\n📄 Processing RS file: {rs_path}")
             contours = load_rtstruct_contours(rs_path)
@@ -331,6 +314,91 @@ def visualize_point_cloud(cloud, num_points=10000):
     plt.show()
 
 
+def load_ordered_ct_series_from_directory(dicom_dir):
+    reader = sitk.ImageSeriesReader()
+    dicom_files = reader.GetGDCMSeriesFileNames(dicom_dir)
+    if not dicom_files:
+        raise RuntimeError(f"No readable DICOM series found in {dicom_dir}.")
+    ordered_datasets = [pydicom.dcmread(file) for file in dicom_files]
+    return ordered_datasets
+
+
+def plot_ct_with_contours(ds, contours, img_dir, txt_dir):
+    img = ds.pixel_array.astype(np.int16)
+    img = np.clip((img + 1000) / 2000 * 255, 0, 255).astype(np.uint8)
+    spacing = list(ds.PixelSpacing) + [ds.SliceThickness]
+    origin = np.array(ds.ImagePositionPatient)
+
+    fig, ax = plt.subplots(figsize=(6, 6))
+    ax.imshow(img, cmap="gray")
+    txt_lines = []
+
+    for roi_name, coords in contours:
+        ij = ((coords[:, :2] - origin[:2]) / spacing[:2]).astype(int)
+        ax.plot(ij[:, 0], ij[:, 1], label=roi_name, linewidth=1)
+        points_str = " ".join(f"{x},{y}" for x, y in ij)
+        txt_lines.append(f"{roi_name}: {points_str}")
+
+    if contours:
+        ax.legend(fontsize="x-small", loc="lower right")
+
+    ax.axis("off")
+    plt.title(f"SOP UID: {ds.SOPInstanceUID}")
+    png_path = os.path.join(img_dir, f"{ds.SOPInstanceUID}.png")
+    txt_path = os.path.join(txt_dir, f"{ds.SOPInstanceUID}.txt")
+    plt.savefig(png_path, bbox_inches="tight", pad_inches=0)
+    plt.close()
+
+    with open(txt_path, "w") as f:
+        f.write("\n".join(txt_lines))
+
+    print(f"Saved image: {png_path}")
+    print(f"Saved contours: {txt_path}")
+
+
+def process_each_rs_separately(base_dir, report_path, output_dir="pointclouds_by_rs"):
+    rs_mapping = parse_report_file(report_path)
+
+    for rs_file, ct_files in rs_mapping.items():
+        ct_paths = []
+        rs_path = None
+        for root, _, files in os.walk(base_dir):
+            for file in files:
+                if file == rs_file:
+                    rs_path = os.path.join(root, file)
+                elif file in ct_files:
+                    ct_paths.append(os.path.join(root, file))
+
+        if rs_path and ct_paths:
+            rs_output_dir = os.path.join(
+                output_dir, rs_file.replace('.dcm', ''))
+            img_dir = os.path.join(rs_output_dir, "imgs")
+            txt_dir = os.path.join(rs_output_dir, "txt")
+
+            os.makedirs(img_dir, exist_ok=True)
+            os.makedirs(txt_dir, exist_ok=True)
+
+            print(f"Processing RS: {rs_file} with {len(ct_paths)} CT files")
+            ct_datasets = [pydicom.dcmread(path) for path in sorted(
+                ct_paths, key=lambda x: pydicom.dcmread(x).ImagePositionPatient[2])]
+
+            contour_map = load_rtstruct_contours(rs_path)
+            for ds in ct_datasets:
+                sop_uid = ds.SOPInstanceUID
+                contours = contour_map.get(sop_uid, [])
+                plot_ct_with_contours(ds, contours, img_dir, txt_dir)
+
+            point_cloud = generate_volume_point_cloud(ct_datasets)
+            visualize_point_cloud(point_cloud)
+
+            out_path = os.path.join(rs_output_dir, f"{rs_file}_pointcloud.npy")
+            np.save(out_path, point_cloud)
+            print(f"Saved point cloud: {out_path}")
+        else:
+            print(f"Missing RS or CT files for RS: {rs_file}")
+
+
 if __name__ == "__main__":
-    data_path = "data/radioprotect/Rakathon Data/SAMPLE_002"  # 👑 ← Update this!
-    process_all_rs(data_path)
+    data_dir = "data/radioprotect/Rakathon Data/SAMPLE_004"
+    report_txt = "data/radioprotect/Rakathon Data Organized/SAMPLE_004_report.txt"
+    process_each_rs_separately(data_dir, report_txt)
