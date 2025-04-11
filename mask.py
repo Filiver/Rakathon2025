@@ -1,63 +1,100 @@
-import pydicom
+# ... existing code in the cell ...
+import os
 import numpy as np
 import matplotlib.pyplot as plt
-from shapely.geometry import Polygon, Point
+import pydicom
 
+dcm_file_path = "data/radioprotect/Rakathon Data/SAMPLE_001/RS.1.2.246.352.221.53086809173815688567595866456863246500.dcm"
 
-def get_contour_points(rs_ds):
-    # Extract structure set ROI contours
-    contours = []
-    for roi_contour in rs_ds.ROIContourSequence:
+# Load the DICOM file
+try:
+    dcm = pydicom.dcmread(dcm_file_path)
+except Exception as e:
+    print(f"Error loading DICOM file: {e}")
+    exit()
+
+# --- Create output directory ---
+output_dir = "contours"
+os.makedirs(output_dir, exist_ok=True)
+print(f"Saving contour plots to: {os.path.abspath(output_dir)}")
+
+# --- Iterate through all contours ---
+contours_plotted = 0
+
+# Check if ROIContourSequence exists
+if hasattr(dcm, "ROIContourSequence"):
+    for i, roi_contour in enumerate(dcm.ROIContourSequence):
+        # Check if ContourSequence exists within the ROI
         if hasattr(roi_contour, "ContourSequence"):
-            for contour in roi_contour.ContourSequence:
-                points = np.array(contour.ContourData).reshape(-1, 3)
-                contours.append(points)
-    return contours
+            for j, contour_sequence_item in enumerate(roi_contour.ContourSequence):
+                # Check if ContourGeometricType is CLOSED_PLANAR
+                if hasattr(contour_sequence_item, "ContourGeometricType") and contour_sequence_item.ContourGeometricType == "CLOSED_PLANAR":
+                    # Check if ContourData and ContourImageSequence exist
+                    if (
+                        hasattr(contour_sequence_item, "ContourData")
+                        and hasattr(contour_sequence_item, "ContourImageSequence")
+                        and len(contour_sequence_item.ContourImageSequence) > 0
+                        and hasattr(contour_sequence_item.ContourImageSequence[0], "ReferencedSOPInstanceUID")
+                    ):
+                        contour_data = contour_sequence_item.ContourData
+                        ref_sop_uid = contour_sequence_item.ContourImageSequence[
+                            0].ReferencedSOPInstanceUID
 
+                        print(
+                            f"\nProcessing ROI {i+1}, Contour {j+1} referencing SOP UID: {ref_sop_uid}")
 
-def create_mask(contours, ct_slice_ds):
-    # Extract image parameters
-    image_position = np.array(ct_slice_ds.ImagePositionPatient)  # (x, y, z)
-    # (row_spacing, col_spacing)
-    pixel_spacing = np.array(ct_slice_ds.PixelSpacing)
-    rows, cols = ct_slice_ds.Rows, ct_slice_ds.Columns
+                        # Reshape contour data into (N, 3) array
+                        points = np.array(contour_data).reshape((-1, 3))
 
-    mask = np.zeros((rows, cols), dtype=np.uint8)
+                        # --- Construct the path to the referenced CT file ---
+                        rtstruct_dir = os.path.dirname(dcm_file_path)
+                        ct_filename = f"CT.{ref_sop_uid}.dcm"
+                        ct_file_path = os.path.join(rtstruct_dir, ct_filename)
 
-    for contour in contours:
-        print(f"Contour: {contour}")
-        if not np.isclose(contour[0, 2], image_position[2]):
-            continue  # Different slice
+                        print(f"Attempting to load CT file: {ct_file_path}")
 
-        # Convert contour coords to pixel indices
-        pixel_coords = []
-        for x, y, _ in contour:
-            col = int(round((x - image_position[0]) / pixel_spacing[0]))
-            row = int(round((y - image_position[1]) / pixel_spacing[1]))
-            pixel_coords.append((col, row))
+                        # Load the referenced CT image
+                        try:
+                            ct_dcm = pydicom.dcmread(ct_file_path)
+                            if hasattr(ct_dcm, "pixel_array"):
+                                ct_image = ct_dcm.pixel_array
 
-        # Rasterize polygon (shapely+point-inside)
-        poly = Polygon(pixel_coords)
-        for row in range(rows):
-            for col in range(cols):
-                if poly.contains(Point(col, row)):
-                    mask[row, col] = 1
+                                # --- Plotting ---
+                                plt.figure(figsize=(8, 8))
+                                plt.imshow(ct_image, cmap="gray")
+                                # Plot contour points (x, y). Add the first point to the end to close the loop.
+                                plt.plot(np.append(points[:, 0], points[0, 0]), np.append(
+                                    points[:, 1], points[0, 1]), "r-", label=f"ROI {i+1} Contour {j+1}")  # Red line
+                                plt.title(
+                                    f"CT Slice with RTSTRUCT Contour\n(SOP UID: {ref_sop_uid})")
+                                plt.xlabel("X coordinate")
+                                plt.ylabel("Y coordinate")
+                                plt.legend()
+                                # Ensure aspect ratio is correct
+                                plt.axis('equal')
 
-    return mask
+                                # --- Save the plot ---
+                                output_filename = f"contour_roi_{i+1}_contour_{j+1}_ct_{ref_sop_uid}.png"
+                                output_path = os.path.join(
+                                    output_dir, output_filename)
+                                plt.savefig(output_path)
+                                plt.close()  # Close the figure to free memory
+                                print(f"Saved plot to: {output_path}")
+                                contours_plotted += 1
 
+                            else:
+                                print(
+                                    f"Error: CT file {ct_filename} does not contain pixel data.")
 
-# Example usage
-rs_path = "radioprotect/data/SAMPLE_001/RS.1.2.246.352.221.4639420678005016246395232927368615560.dcm"
-ct_path = "radioprotect/data/SAMPLE_001/CT.1.2.246.352.221.50911002929711127858269804207128222.dcm"
+                        except FileNotFoundError:
+                            print(
+                                f"Error: Referenced CT file not found at {ct_file_path}")
+                        except Exception as e:
+                            print(
+                                f"Error loading or plotting CT file {ct_filename}: {e}")
+                        # --- End Plotting/Saving Block ---
+else:
+    print("RTSTRUCT file does not contain ROIContourSequence.")
 
-rs_ds = pydicom.dcmread(rs_path)
-ct_ds = pydicom.dcmread(ct_path)
-
-contours = get_contour_points(rs_ds)
-mask = create_mask(contours, ct_ds)
-
-plt.imshow(ct_ds.pixel_array, cmap="gray")
-plt.imshow(mask, cmap="Reds", alpha=0.4)
-plt.title("Tumor Mask Overlay")
-plt.axis("off")
-plt.show()
+print(f"\nFinished processing. Plotted and saved {contours_plotted} contours.")
+# ... rest of the cell (if any) ...
