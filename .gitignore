@@ -1,1 +1,6 @@
 radioprotect/
+.idea/
+*.iml
+*.hprof
+*.log
+venv/
