@@ -110,6 +110,8 @@ def generate_volume_point_cloud(ct_datasets, rgb=True, mask=False):
                 continue
             sizes = ndi.sum(voxel_mask, labeled, range(1, num + 1))
             voxel_mask = (labeled == (np.argmax(sizes) + 1))
+        else:
+            voxel_mask = np.ones_like(img, dtype=bool)
 
         rows, cols = img.shape
         spacing = list(ds.PixelSpacing) + [ds.SliceThickness]
@@ -119,7 +121,7 @@ def generate_volume_point_cloud(ct_datasets, rgb=True, mask=False):
         print(f"Processing slice with shape: {img.shape} and origin: {origin}")
 
         coords = np.stack((origin[0] + xx * spacing[0],
-                           origin[1] + (rows - 1 - yy) * spacing[1],
+                           origin[1] + yy * spacing[1],
                            np.full_like(xx, origin[2])), axis=-1)
 
         masked_coords = coords[voxel_mask]
