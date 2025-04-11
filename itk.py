@@ -301,7 +301,7 @@ def process_all_rs(directory, output_dir="plots"):
     cloud_path = os.path.join(output_dir, "full_volume_pointcloud.npy")
     np.save(cloud_path, volume_cloud)
     print(f"💾 Saved full volume point cloud: {cloud_path}")
-    visualize_point_cloud(volume_cloud, num_points=50000)  # adjustable
+    visualize_point_cloud(volume_cloud, num_points=200000)  # adjustable
 
 
 def visualize_point_cloud(cloud, num_points=10000):
@@ -332,5 +332,5 @@ def visualize_point_cloud(cloud, num_points=10000):
 
 
 if __name__ == "__main__":
-    data_path = "data/radioprotect/Rakathon Data/SAMPLE_001"  # 👑 ← Update this!
+    data_path = "data/radioprotect/Rakathon Data/SAMPLE_002"  # 👑 ← Update this!
     process_all_rs(data_path)

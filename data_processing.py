@@ -76,4 +76,4 @@ def process_directory(root_dir):
 
 
 if __name__ == "__main__":
-    process_directory("radioprotect/data/SAMPLE_001")
+    process_directory("radioprotect/data/SAMPLE_002")
