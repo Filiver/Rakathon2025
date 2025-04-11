@@ -2,16 +2,41 @@ import os
 import pydicom
 import matplotlib.pyplot as plt
 import numpy as np
+import regex as re
+import SimpleITK as sitk
+import scipy.ndimage as ndi
+
+ROI_intrested = [
+    re.compile(r"^gtv.*"),
+    re.compile(r"^ptv.*"),
+    re.compile(r"^ctv.*"),
+    re.compile(r"body"),
+    re.compile(r"spinalcord"),
+    re.compile(r"parotid*"),
+    re.compile(r"submandibular*"),
+    re.compile(r"ezophagus*"),
+    re.compile(r"glnd_submand*"),
+]
 
 
 def load_rtstruct_contours(rtstruct_path):
     rs = pydicom.dcmread(rtstruct_path)
 
-    # Map SOPInstanceUID to a list of contours
+    # Map ROINumber → ROIName
+    roi_names = {}
+    for item in rs.StructureSetROISequence:
+        if hasattr(item, "ROINumber") and hasattr(item, "ROIName"):
+            roi_names[item.ROINumber] = item.ROIName
+
+    # Map SOPInstanceUID → list of (ROIName, coordinates)
     contour_map = {}
 
     for roi in rs.ROIContourSequence:
-        roi_name = getattr(roi, "ROIDisplayName", "Unnamed ROI")
+        roi_number = roi.ReferencedROINumber
+        roi_name = roi_names.get(roi_number, f"ROI_{roi_number}")
+        roi_name = roi_name.lower()
+        if not any(pattern.match(roi_name) for pattern in ROI_intrested):
+            continue
 
         for contour in roi.ContourSequence:
             if not hasattr(contour, "ContourImageSequence"):
@@ -43,7 +68,165 @@ def find_ct_by_sop(directory):
     return sop_to_ct
 
 
-def plot_ct_with_contours(ds, contours, output_path):
+def load_ordered_ct_series_from_directory(dicom_dir):
+    """
+    Loads and returns a list of ordered pydicom Datasets using SimpleITK's SeriesReader.
+    """
+    reader = sitk.ImageSeriesReader()
+    dicom_files = reader.GetGDCMSeriesFileNames(dicom_dir)
+
+    if not dicom_files:
+        raise RuntimeError(f"No readable DICOM series found in {dicom_dir}.")
+
+    # Return the same list as used by reader, but loaded via pydicom for metadata access
+    ordered_datasets = []
+    for file in dicom_files:
+        try:
+            ds = pydicom.dcmread(file)
+            ordered_datasets.append(ds)
+        except Exception as e:
+            print(f"⚠️ Could not read DICOM file {file}: {e}")
+    return ordered_datasets
+
+
+def generate_volume_point_cloud(ct_datasets, rgb=True, mask=False):
+    import matplotlib.cm as cm
+    points_list = []
+    valid_cts = []
+
+    for ds in ct_datasets:
+        try:
+            _ = ds.ImagePositionPatient[2]
+            _ = ds.PixelSpacing
+            valid_cts.append(ds)
+        except AttributeError:
+            print(
+                f"⚠️ Skipping slice without spatial metadata: {getattr(ds, 'SOPInstanceUID', 'UNKNOWN')}")
+
+    if not valid_cts:
+        raise ValueError("🚫 No valid CT slices found with spatial metadata!")
+
+    valid_cts = sorted(valid_cts, key=lambda ds: ds.ImagePositionPatient[2])
+
+    for ds in valid_cts:
+        img = ds.pixel_array.astype(np.int16)
+
+        # Step 1: Threshold image to exclude air and bed
+        voxel_mask = (img < -500) | (img > 500)
+        if not np.any(voxel_mask):
+            continue
+
+        # Step 2: If mask is enabled, keep only largest connected component
+        if mask:
+            labeled, num = ndi.label(voxel_mask)
+            if num == 0:
+                continue
+            sizes = ndi.sum(voxel_mask, labeled, range(1, num + 1))
+            voxel_mask = (labeled == (np.argmax(sizes) + 1))
+        else:
+            voxel_mask = np.ones_like(voxel_mask, dtype=bool)
+
+        rows, cols = img.shape
+        spacing = list(ds.PixelSpacing) + [ds.SliceThickness]
+        origin = np.array(ds.ImagePositionPatient)
+
+        x = np.arange(cols)
+        y = np.arange(rows)
+        xx, yy = np.meshgrid(x, y)
+        print(f"xx: {xx.shape}, yy: {yy.shape}")
+
+        coords_x = origin[0] + xx * spacing[0]
+        coords_y = origin[1] + (rows - 1 - yy) * spacing[1]  # flipped
+        coords_z = np.full_like(coords_x, origin[2])
+
+        coords = np.stack((coords_x, coords_y, coords_z), axis=-1)
+        masked_coords = coords[voxel_mask]
+
+        if rgb:
+            img_normalized = np.clip(
+                (img.astype(np.float32) + 300) / 1500, 0, 1)
+            colored_img = cm.get_cmap("viridis")(
+                img_normalized)[:, :, :3]  # RGB
+            masked_rgb = (colored_img[voxel_mask] * 255).astype(np.uint8)
+            cloud = np.hstack((masked_coords, masked_rgb))
+        else:
+            cloud = masked_coords
+
+        points_list.append(cloud)
+    print(f"Generated {len(points_list)} slices of point cloud data.")
+
+    return np.vstack(points_list)
+
+
+def generate_point_cloud(ds, rgb=True):
+    """
+    Converts a single DICOM CT slice into a point cloud with real-world coordinates.
+    Optionally includes grayscale value as RGB.
+    """
+    img = ds.pixel_array.astype(np.int16)
+    spacing = list(ds.PixelSpacing) + [ds.SliceThickness]
+    origin = np.array(ds.ImagePositionPatient)
+
+    # Get image dimensions
+    rows, cols = img.shape
+
+    # Create pixel grid
+    x = np.arange(cols)
+    y = np.arange(rows)
+    xx, yy = np.meshgrid(x, y)
+
+    # Convert to real-world coordinates (x, y, z in mm)
+    coords_x = origin[0] + xx * spacing[0]
+    coords_y = origin[1] + yy * spacing[1]
+    coords_z = np.full_like(coords_x, origin[2])  # constant slice Z
+
+    # Flatten everything
+    points = np.stack((coords_x, coords_y, coords_z), axis=-1).reshape(-1, 3)
+
+    if rgb:
+        # Normalize grayscale value for RGB
+        norm = np.clip((img + 1000) / 2000 * 255, 0, 255).astype(np.uint8)
+        values = np.stack([norm, norm, norm], axis=-1).reshape(-1, 3)
+        return np.hstack((points, values))  # shape: [N, 6]
+    else:
+        return points  # shape: [N, 3]
+
+
+def generate_point_cloud(ds, rgb=True):
+    """
+    Converts a single DICOM CT slice into a point cloud with real-world coordinates.
+    Optionally includes grayscale value as RGB.
+    """
+    img = ds.pixel_array.astype(np.int16)
+    spacing = list(ds.PixelSpacing) + [ds.SliceThickness]
+    origin = np.array(ds.ImagePositionPatient)
+
+    # Get image dimensions
+    rows, cols = img.shape
+
+    # Create pixel grid
+    x = np.arange(cols)
+    y = np.arange(rows)
+    xx, yy = np.meshgrid(x, y)
+
+    # Convert to real-world coordinates (x, y, z in mm)
+    coords_x = origin[0] + xx * spacing[0]
+    coords_y = origin[1] + yy * spacing[1]
+    coords_z = np.full_like(coords_x, origin[2])  # constant slice Z
+
+    # Flatten everything
+    points = np.stack((coords_x, coords_y, coords_z), axis=-1).reshape(-1, 3)
+
+    if rgb:
+        # Normalize grayscale value for RGB
+        norm = np.clip((img + 1000) / 2000 * 255, 0, 255).astype(np.uint8)
+        values = np.stack([norm, norm, norm], axis=-1).reshape(-1, 3)
+        return np.hstack((points, values))  # shape: [N, 6]
+    else:
+        return points  # shape: [N, 3]
+
+
+def plot_ct_with_contours(ds, contours, img_dir, txt_dir):
     img = ds.pixel_array.astype(np.int16)
     img = np.clip((img + 1000) / 2000 * 255, 0, 255).astype(np.uint8)
 
@@ -68,21 +251,26 @@ def plot_ct_with_contours(ds, contours, output_path):
     ax.axis("off")
     plt.title(f"SOP UID: {ds.SOPInstanceUID}")
 
-    # Save image
-    plt.savefig(output_path, bbox_inches="tight", pad_inches=0)
+    # Output paths
+    png_path = os.path.join(img_dir, f"{ds.SOPInstanceUID}.png")
+    txt_path = os.path.join(txt_dir, f"{ds.SOPInstanceUID}.txt")
+
+    plt.savefig(png_path, bbox_inches="tight", pad_inches=0)
     plt.close()
 
-    # Save text file with same basename
-    txt_path = output_path.replace(".png", ".txt")
     with open(txt_path, "w") as f:
         f.write("\n".join(txt_lines))
 
-    print(f"Saved: {output_path}")
-    print(f"Saved: {txt_path}")
+    print(f"Saved image: {png_path}")
+    print(f"Saved contours: {txt_path}")
 
 
 def process_all_rs(directory, output_dir="plots"):
-    os.makedirs(output_dir, exist_ok=True)
+    img_dir = os.path.join(output_dir, "imgs")
+    txt_dir = os.path.join(output_dir, "txt")
+
+    os.makedirs(img_dir, exist_ok=True)
+    os.makedirs(txt_dir, exist_ok=True)
 
     rtstruct_files = [os.path.join(dp, f) for dp, dn, filenames in os.walk(directory)
                       for f in filenames if f.lower().endswith(".dcm")]
@@ -91,6 +279,7 @@ def process_all_rs(directory, output_dir="plots"):
     print(f"🧠 Indexed {len(sop_to_ct)} CT files.")
 
     for rs_path in rtstruct_files:
+        continue
         try:
             print(f"\n📄 Processing RS file: {rs_path}")
             contours = load_rtstruct_contours(rs_path)
@@ -101,11 +290,45 @@ def process_all_rs(directory, output_dir="plots"):
                     continue
 
                 ct_ds = sop_to_ct[sop_uid]
-                out_path = os.path.join(output_dir, f"{sop_uid}.png")
-                plot_ct_with_contours(ct_ds, contour_list, out_path)
+                plot_ct_with_contours(ct_ds, contour_list, img_dir, txt_dir)
 
         except Exception as e:
             print(f"💥 Error processing {rs_path}: {e}")
+
+    # Generate and save point cloud
+    ct_datasets = load_ordered_ct_series_from_directory(directory)
+    volume_cloud = generate_volume_point_cloud(ct_datasets)
+    cloud_path = os.path.join(output_dir, "full_volume_pointcloud.npy")
+    np.save(cloud_path, volume_cloud)
+    print(f"💾 Saved full volume point cloud: {cloud_path}")
+    visualize_point_cloud(volume_cloud, num_points=50000)  # adjustable
+
+
+def visualize_point_cloud(cloud, num_points=10000):
+    """
+    Visualize a sample of the point cloud using matplotlib.
+    """
+    if cloud.shape[0] > num_points:
+        indices = np.random.choice(
+            cloud.shape[0], size=num_points, replace=False)
+        cloud = cloud[indices]
+
+    fig = plt.figure(figsize=(8, 6))
+    ax = fig.add_subplot(111, projection='3d')
+
+    x, y, z = cloud[:, 0], cloud[:, 1], cloud[:, 2]
+    if cloud.shape[1] == 6:
+        colors = cloud[:, 3:] / 255.0
+        ax.scatter(x, y, z, c=colors, s=1)
+    else:
+        ax.scatter(x, y, z, color='gray', s=1)
+
+    ax.set_xlabel("X (mm)")
+    ax.set_ylabel("Y (mm)")
+    ax.set_zlabel("Z (mm)")
+    ax.set_title("3D Point Cloud Preview")
+    plt.tight_layout()
+    plt.show()
 
 
 if __name__ == "__main__":
