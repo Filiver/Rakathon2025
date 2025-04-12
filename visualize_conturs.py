@@ -19,7 +19,7 @@ def visualize_all_contours_from_txt(dir_path):
             b = ((hash_val >> 16) % 256) / 255.0
             color_map[label] = (r, g, b)
         return color_map[label]
-
+    all_points = {}
     for filename in os.listdir(dir_path):
         print(f"Processing file: {filename}")
         if filename.endswith(".txt"):
@@ -35,6 +35,9 @@ def visualize_all_contours_from_txt(dir_path):
                         continue
                     ax.plot(points[:, 0], points[:, 1], points[:, 2],
                             label=roi_name, color=get_color_for_label(roi_name))
+                    if roi_name not in all_points:
+                        all_points[roi_name] = []
+                    all_points[roi_name].extend(points.tolist())
 
     ax.set_xlabel("X (mm)")
     ax.set_ylabel("Y (mm)")
@@ -42,9 +45,21 @@ def visualize_all_contours_from_txt(dir_path):
     ax.set_title("3D Contours from TXT Files")
     plt.tight_layout()
     plt.show()
+    return all_points
 
 
 if __name__ == "__main__":
     # Example usage
-    visualize_all_contours_from_txt(
-        "pointclouds_by_rs/SAMPLE_004/RS.1.2.246.352.221.52794105832653520384075859529424384185__RS.1.2.246.352.221.57475698521031836325890889930332779148__RS.1.2.246.352.221.530968562667814550516230413739928631461__RS.1.2.246.352.221.534409961817902190914559599786692832400/txt")
+    import os
+    dir = "pointclouds_by_rs/SAMPLE_004"
+    subdirs = os.listdir(dir)
+    for subdir in subdirs:
+        if subdir != "RS.1.2.246.352.221.52794105832653520384075859529424384185__RS.1.2.246.352.221.57475698521031836325890889930332779148__RS.1.2.246.352.221.530968562667814550516230413739928631461__RS.1.2.246.352.221.534409961817902190914559599786692832400":
+            continue
+        print(f"Processing subdirectory: {subdir}")
+        all_points = visualize_all_contours_from_txt(
+            os.path.join(dir, subdir, "txt"))
+        for roi_name, points_list in all_points.items():
+            print(f"ROI: {roi_name}")
+            print(points_list)
+            input()

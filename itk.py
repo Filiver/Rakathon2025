@@ -357,7 +357,7 @@ def plot_ct_with_contours(ds, contours, img_dir, txt_dir):
         f.write("\n".join(txt_lines))
 
 
-def process_each_rs_separately(base_dir, report_path, output_dir="pointclouds_by_rs"):
+def process_each_rs_separately(base_dir, report_path, output_dir="pointclouds_by_rs", point_cloud=False):
     output_dir = os.path.join(output_dir, os.path.basename(base_dir))
     print(f"Output directory: {output_dir}")
     rs_mapping = process_sample(base_dir)
@@ -419,18 +419,21 @@ def process_each_rs_separately(base_dir, report_path, output_dir="pointclouds_by
                 plot_ct_with_contours(
                     ds, contours, img_dir, txt_dir)
 
-            point_cloud = generate_volume_point_cloud(ct_datasets, mask=False)
-            visualize_point_cloud(point_cloud, num_points=10000)
+            if point_cloud:
+                point_cloud = generate_volume_point_cloud(
+                    ct_datasets, mask=False)
+                visualize_point_cloud(point_cloud, num_points=10000)
 
-            out_path = os.path.join(
-                rs_output_dir, f"{rs_files_combined}_full_volume.npy")
-            np.save(out_path, point_cloud)
-            point_cloud = generate_volume_point_cloud(ct_datasets, mask=True)
-            out_path = os.path.join(
-                rs_output_dir, f"{rs_files_combined}_masked_volume.npy")
-            np.save(out_path, point_cloud)
+                out_path = os.path.join(
+                    rs_output_dir, f"{rs_files_combined}_full_volume.npy")
+                np.save(out_path, point_cloud)
+                point_cloud = generate_volume_point_cloud(
+                    ct_datasets, mask=True)
+                out_path = os.path.join(
+                    rs_output_dir, f"{rs_files_combined}_masked_volume.npy")
+                np.save(out_path, point_cloud)
 
-            print(f"Saved point cloud: {out_path}")
+                print(f"Saved point cloud: {out_path}")
         else:
             print(f"Missing RS or CT files for RS: {rs_files}")
 
