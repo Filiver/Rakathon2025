@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 import numpy as np
 from scipy.spatial import cKDTree
+from scipy.spatial.distance import cdist
 
 
 def load_contours(file1: str, file2: str) -> Tuple[np.ndarray, np.ndarray]:
@@ -101,6 +102,14 @@ def compute_point_to_point_distance(contour_a: np.ndarray, contour_b: np.ndarray
         "percentage_above_threshold": percentage_above_threshold
     }
 
+def hausdorff_distance(contour1, contour2):
+    """
+    Calculates the Hausdorff distance between two contours.
+    """
+    dist_matrix = cdist(contour1, contour2, 'euclidean')
+    hausdorff = max(np.min(dist_matrix, axis=1).max(), np.min(dist_matrix, axis=0).max())
+    return hausdorff
+
 
 if __name__ == "__main__":
     # import sys
@@ -118,10 +127,12 @@ if __name__ == "__main__":
     print(f"Loaded {len(c2)} points from {file2}")
     # plot_contours_3d(c1, c2, 'sample_contours.png')
 
-    metrics = compute_point_to_point_distance(c1, c2, 0.5)
+    metrics_p2pd = compute_point_to_point_distance(c1, c2, 0.5)
+    hausdorff = hausdorff_distance(c1, c2)
 
-    print(f"Mean distance: {metrics['mean_distance']:.2f} mm")
-    print(f"Max distance: {metrics['max_distance']:.2f} mm")
-    print(f"Percentage of points > 3mm: {metrics['percentage_above_threshold']:.2f}%")
+    print(f"Mean distance: {metrics_p2pd['mean_distance']:.2f} mm")
+    print(f"Max distance: {metrics_p2pd['max_distance']:.2f} mm")
+    print(f"Percentage of points > 3mm: {metrics_p2pd['percentage_above_threshold']:.2f}%")
+    print(f"Hausdorff Distance: {hausdorff} mm")
 
 
