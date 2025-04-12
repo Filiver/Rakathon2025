@@ -279,7 +279,7 @@ def align_measurement_to_reference_scan(reference_filenames, measurement_filenam
         save_videos (bool, optional): Whether to save videos of the registration process. Defaults to False.
 
     Returns:
-        dict[str, torch.Tensor]: key: "reference" (reference scan), "measurement" (aligned measurement scan), "spacing" (spacing of the reference scan).
+        dict[str, torch.Tensor]: key: "reference" (reference scan), "measurement" (aligned measurement scan), "spacing" (spacing of the reference scan), "translation" (translation vector in reference space), "origin" (origin of the reference scan).
     """
     # load data - receive filenames
     reference_scan_image, reference_reader = get_scan_image_from_filenames(reference_filenames)
@@ -331,15 +331,12 @@ def align_measurement_to_reference_scan(reference_filenames, measurement_filenam
     # Apply the translation to the measurement volume
     print("Transforming measurement volume...")
     transformed_meas_volume = transform_meas_to_ref(translation_tensor, padded_measurement_volume)
+    translation_ref = translation_tensor
     # Save the transformed measurement volume as a video
     if save_videos:
         print("Saving videos after registration...")
         volumes_to_video(cropped_reference_volume, transformed_meas_volume, "registered_measurement_diff.mp4", fps=10)
     # Transform the translation vector to the coordinate system of the reference volume
-    translation_ref = torch.tensor(translation, dtype=torch.float32)  # pixels spaced in the reference volume
-    translation_ref = (
-        translation_ref * torch.tensor(reference_scan["spacing"]) / torch.tensor(measurement_scan["spacing"])
-    )  # pixel-space in the reference volume
     meas_translated_to_ref = meas_to_ref_final_step(
         transformed_meas_volume, measurement_scan["spacing"], reference_scan["spacing"], equalized_reference_volume.shape
     )
@@ -350,6 +347,8 @@ def align_measurement_to_reference_scan(reference_filenames, measurement_filenam
         "reference": equalized_reference_volume,
         "measurement": meas_translated_to_ref,
         "spacing": torch.tensor(reference_scan["spacing"][::-1]),
+        "translation": translation_ref,
+        "origin": torch.tensor(reference_scan["origin"][::-1]),
     }
 
 
@@ -377,3 +376,5 @@ if __name__ == "__main__":
     print(res["reference"].shape)
     print(res["measurement"].shape)
     print(res["spacing"])
+    print(res["translation"])
+    print(res["origin"])

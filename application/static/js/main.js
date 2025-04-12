@@ -1,3 +1,3 @@
-import { SimView } from "./SimView.js";
+import { View } from "./view.js";
 
-SimView.run();
+View.run();

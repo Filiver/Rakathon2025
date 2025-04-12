@@ -47,24 +47,25 @@ export class PlaybackControls {
     };
 
     this.playButtonClick = () => {
-      if (this.animationController.isPlaying) {
-        this.animationController.pause();
-        this.playButton.textContent = "Play";
-      } else {
-        this.animationController.play();
-        this.playButton.textContent = "Pause";
-      }
+      this.animationController.togglePlayPause();
+      this.playButton.textContent = this.animationController.isPlaying
+        ? "Pause"
+        : "Play";
     };
 
     this.stepBackButtonClick = () => {
       this.animationController.pause();
-      this.animationController.stepBackward();
+      this.animationController.setFrame(
+        this.animationController.currentFrame - 1
+      );
       this.playButton.textContent = "Play";
     };
 
     this.stepForwardButtonClick = () => {
       this.animationController.pause();
-      this.animationController.stepForward();
+      this.animationController.setFrame(
+        this.animationController.currentFrame + 1
+      );
       this.playButton.textContent = "Play";
     };
 
@@ -93,10 +94,10 @@ export class PlaybackControls {
           this.recordButton.click();
           break;
         case "ArrowRight":
-          this.animationController.stepForward();
+          this.stepForwardButtonClick();
           break;
         case "ArrowLeft":
-          this.animationController.stepBackward();
+          this.stepBackButtonClick();
           break;
         case " ":
           this.playButton.click();

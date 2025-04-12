@@ -1,208 +1,108 @@
 import { PlaybackControls } from "../ui/PlaybackControls.js";
 
-export class AnimationController {
-  constructor(app, simulationTimestep) {
-    this.app = app;
-    this.playbackControls = null;
-    this.states = null;
-    this.isPlaying = false;
-    this.playbackSpeed = 1;
-    this.isRecording = false;
-    this.capturer = null;
-    this.startTime = null;
-    this.recordingFormat = "jpg"; // Default recording format
-    this.currentStateIndex = 0;
-    this.totalTime = 0; // Total animation time
-    this.currentTime = 0; // Current time in the animation
-    this.simulationTimestep = simulationTimestep; // Simulation timestep
-    this.lastUpdateTime = null;
-  }
+const DEFAULT_FPS = 15;
 
-  loadAnimation(states) {
-    this.states = states;
-    this.totalTime = this.states[this.states.length - 1].time;
-    this.playbackControls = new PlaybackControls(this);
-    this.goToTime(0);
+export class AnimationController {
+  /**
+   * @param {View} view - The main view instance.
+   * @param {number} totalFrames - Total number of frames available.
+   * @param {number} fps - Target frames per second for playback.
+   */
+  constructor(view, totalFrames, fps = DEFAULT_FPS) {
+    this.view = view;
+    this.totalFrames = totalFrames;
+    this.fps = fps;
+    this.interval = 1000 / this.fps; // Milliseconds per frame
+
+    this.isPlaying = false;
+    this.currentFrame = 0;
+    this.lastFrameTime = 0;
+    this.animationFrameId = null; // Store requestAnimationFrame ID
+
+    // Bind methods
+    this.animate = this.animate.bind(this);
+    this.play = this.play.bind(this);
+    this.pause = this.pause.bind(this);
+    this.setFrame = this.setFrame.bind(this);
   }
 
   play() {
-    if (!this.isPlaying) {
-      this.isPlaying = true;
-      this.lastUpdateTime = performance.now();
-    }
+    if (this.isPlaying || this.totalFrames <= 1) return;
+    this.isPlaying = true;
+    this.lastFrameTime = performance.now(); // Reset time for smooth start
+    console.log("Animation playing");
+    // Start the animation loop
+    this.animationFrameId = requestAnimationFrame(this.animate);
+    this.view.playbackControls?.updatePlayButton(true); // Update UI
   }
 
   pause() {
+    if (!this.isPlaying) return;
     this.isPlaying = false;
+    console.log("Animation paused");
+    cancelAnimationFrame(this.animationFrameId); // Stop the loop
+    this.animationFrameId = null;
+    this.view.playbackControls?.updatePlayButton(false); // Update UI
   }
 
-  setSpeed(speed) {
-    this.playbackSpeed = speed;
-  }
-
-  setRecordingFormat(format) {
-    this.recordingFormat = format;
-  }
-
-  getRecordingOptionsForFormat(format) {
-    const options = {
-      framerate: 30,
-      verbose: false,
-      motionBlurFrames: 0,
-    };
-
-    switch (format) {
-      case "jpg":
-        options.format = "jpg";
-        options.quality = 600;
-        break;
-      case "png":
-        options.format = "png";
-        break;
-      default:
-        throw new Error(`Unsupported format: ${format}`);
-    }
-    return options;
-  }
-
-  forceRedrawStaticElements() {
-    this.playbackControls.forceRedraw();
-    this.app.bodyStateWindow.forceRedraw();
-  }
-
-  getStateIndexForTime(targetTime) {
-    var q = targetTime / this.simulationTimestep;
-    q = Math.round(q);
-    if (q < 0) q = 0;
-    if (q >= this.states.length) q = this.states.length - 1;
-    return q;
-  }
-
-  seekToIndex(index) {
-    this.currentStateIndex = index;
-    this.currentTime = this.states[index].time;
-    this.updateScene();
-  }
-
-  stepForward() {
-    if (this.isPlaying) return; // Ignore if playing
-    const newIndex = (this.currentStateIndex + 1) % this.states.length;
-    this.seekToIndex(newIndex);
-    this.forceRedrawStaticElements();
-  }
-
-  stepBackward() {
-    if (this.isPlaying) return; // Ignore if playing
-    const newIndex =
-      (this.currentStateIndex - 1 + this.states.length) % this.states.length;
-    this.seekToIndex(newIndex);
-    this.forceRedrawStaticElements();
-  }
-
-  goToTime(time) {
-    if (time < 0 || time > this.totalTime) return; // Ignore out-of-bounds time
-    const index = this.getStateIndexForTime(time);
-    this.seekToIndex(index);
-    if (!this.isPlaying) {
-      this.forceRedrawStaticElements();
-    }
-  }
-
-  startRecording() {
-    if (this.isRecording) return;
-    // Reset animation to start
-    this.seekToIndex(0);
-    const options = this.getRecordingOptionsForFormat(this.recordingFormat);
-    // Initialize CCapture
-    this.capturer = new CCapture(options);
-    this.isRecording = true;
-    this.startTime = performance.now();
-    // Start recording and play animation if not already playing
-    this.capturer.start();
-    if (!this.isPlaying) {
+  togglePlayPause() {
+    if (this.isPlaying) {
+      this.pause();
+    } else {
       this.play();
     }
   }
 
-  getTotalTime() {
-    return this.totalTime;
+  /**
+   * Sets the current frame index and updates the view.
+   * @param {number} frameIndex - The desired frame index.
+   * @param {boolean} [updateControls=true] - Whether to update playback controls UI.
+   */
+  setFrame(frameIndex, updateControls = true) {
+    const newFrame = Math.max(0, Math.min(frameIndex, this.totalFrames - 1));
+    if (newFrame !== this.currentFrame || updateControls) {
+      // Update if frame changed or forced
+      this.currentFrame = newFrame;
+      this.view.displayFrame(this.currentFrame); // Tell view to update images
+      if (updateControls && this.view.playbackControls) {
+        this.view.playbackControls.updateSliderAndCounter(this.currentFrame);
+      }
+    }
+  }
+
+  nextFrame() {
+    let nextFrameIndex = this.currentFrame + 1;
+    if (nextFrameIndex >= this.totalFrames) {
+      nextFrameIndex = 0; // Loop back to the start
+    }
+    this.setFrame(nextFrameIndex);
+  }
+
+  // The core animation loop
+  animate(now) {
+    if (!this.isPlaying) return;
+
+    // Request the next frame immediately
+    this.animationFrameId = requestAnimationFrame(this.animate);
+
+    const elapsed = now - this.lastFrameTime;
+
+    // Check if enough time has passed based on the desired FPS
+    if (elapsed >= this.interval) {
+      this.lastFrameTime = now - (elapsed % this.interval); // Adjust for smoother timing
+      this.nextFrame();
+    }
   }
 
   getCurrentTime() {
-    return this.currentTime;
+    return this.currentFrame / this.fps;
   }
 
-  getCurrentStateIndex() {
-    return this.currentStateIndex;
-  }
-
-  getCurrentState() {
-    return this.states[this.currentStateIndex];
-  }
-
-  stopRecording() {
-    if (!this.isRecording) return;
-    this.isRecording = false;
-    this.capturer.stop();
-    this.capturer.save();
-    // Reset recording state
-    this.startTime = null;
-  }
-
-  animate(now) {
-    if (!this.isPlaying || !this.states) return;
-    if (this.lastUpdateTime === null) {
-      this.lastUpdateTime = now;
-    }
-    const dt = (now - this.lastUpdateTime) / 1000;
-    this.lastUpdateTime = now;
-    this.currentTime += dt * this.playbackSpeed;
-    this.currentTime = this.currentTime % this.totalTime;
-    const newStateIndex = this.getStateIndexForTime(this.currentTime);
-    // Update state if changed
-    if (newStateIndex !== this.currentStateIndex) {
-      this.seekToIndex(newStateIndex);
-      this.playbackControls.animate(now);
-      if (this.app.bodyStateWindow) {
-        this.app.bodyStateWindow.animate(now);
-      }
-    }
-
-    if (this.isRecording && this.capturer) {
-      const elapsed = now - this.startTime;
-      const duration = this.totalTime * 1000; // Convert to milliseconds
-      this.capturer.capture(this.app.scene.renderer.domElement);
-      // Stop recording if we've completed one loop
-      if (elapsed >= duration) {
-        this.playbackControls.recordButton.click();
-      }
-    }
-  }
-
-  updateScene() {
-    if (!this.app.bodies || !this.states[this.currentStateIndex]) return;
-    const state = this.states[this.currentStateIndex];
-    // Update all body states
-    state.bodies.forEach((bodyState) => {
-      const body = this.app.bodies.get(bodyState.name);
-      if (body) {
-        // Update the body state - this handles both batched and non-batched formats
-        body.updateState(bodyState);
-      }
-    });
-    if (this.app.scalarPlotter) {
-      this.app.scalarPlotter.setEndIndex(this.currentStateIndex);
-    }
+  getTotalTime() {
+    return this.totalFrames / this.fps;
   }
 
   dispose() {
-    if (this.playbackControls) {
-      this.playbackControls.dispose();
-      this.playbackControls = null;
-    }
-    if (this.capturer) {
-      this.capturer.stop();
-      this.capturer = null;
-    }
+    this.pause(); // Ensure animation loop is stopped
   }
 }

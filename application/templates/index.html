@@ -37,7 +37,6 @@
     <!-- Add Socket.IO client before other scripts -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
 
-    <!-- Add CCapture.js -->
     <script src="{{ url_for('static', filename='lib/CCapture.js') }}"></script>
     <script src="{{ url_for('static', filename='lib/webm-writer-0.2.0.js') }}"></script>
     <script src="{{ url_for('static', filename='lib/gif.js') }}"></script>
@@ -49,8 +48,7 @@
       {
         "imports": {
           "three": "https://cdn.jsdelivr.net/npm/three@v0.174.0/build/three.module.js",
-          "three/addons/": "https://cdn.jsdelivr.net/npm/three@v0.174.0/examples/jsm/",
-          "chroma": "https://cdn.jsdelivr.net/npm/chroma-js@3.1.2/index.min.js"
+          "three/addons/": "https://cdn.jsdelivr.net/npm/three@v0.174.0/examples/jsm/"
         }
       }
     </script>
