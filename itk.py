@@ -437,6 +437,38 @@ def process_each_rs_separately(base_dir, report_path, output_dir="pointclouds_by
         else:
             print(f"Missing RS or CT files for RS: {rs_files}")
 
+def process_rt_ct_pairs(base_dir, cts, rs):
+    for rs_files, ct_files in zip(rs, cts):
+        ct_paths = []
+        rs_paths = []
+        rs_path = None
+        for root, _, files in os.walk(base_dir):
+            for file in files:
+                if file in rs_files:
+                    # rs_path = os.path.join(root, file)
+                    rs_paths.append(os.path.join(base_dir, "RT", file))
+                elif file in ct_files:
+                    ct_paths.append(os.path.join(base_dir, "CT", file))
+        print(f"Found {len(rs_paths)} RS files and {len(ct_paths)} CT files.")
+
+        if rs_paths and ct_paths:
+            print(
+                f"Processing RS: {len(rs_paths)} files and {len(ct_paths)} CT files.")
+            
+            ct_datasets = [pydicom.dcmread(path) for path in sorted(
+                ct_paths, key=lambda x: pydicom.dcmread(x).ImagePositionPatient[2])]
+
+            contour_map = {}
+            for rs_path in rs_paths:
+                new_contours = load_rtstruct_contours(rs_path)
+                for sop_uid, contours in new_contours.items():
+                    if sop_uid not in contour_map:
+                        contour_map[sop_uid] = []
+                    contour_map[sop_uid].extend(contours)
+            return contour_map
+        else:
+            print(f"Missing RS or CT files for RS: {rs_files}")
+
 
 if __name__ == "__main__":
     data_dir = "data/radioprotect/Rakathon Data/SAMPLE_004"
