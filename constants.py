@@ -1,5 +1,5 @@
 # thresholds in mm
-thresh_GTV = 0.2
+thresh_GTV = 3
 thresh_CTV = 3
 thresh_PTV = 3
 thresh_spinal_cord = 3
