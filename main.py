@@ -1,17 +1,21 @@
 import organize_new
 import os
-from alignment import align_scans
+from pointcloud_alignment.fourier import align_measurement_to_reference_scan
 from contours_finder import find_countours_in_scan
 
+here = os.path.dirname(os.path.abspath(__file__))
 # --- Configuration ---
 # Set the main directory containing your sample folders
-MAIN_SAMPLES_DIRECTORY = "data/radioprotect/Rakathon Data"
+MAIN_SAMPLES_DIRECTORY = "data/radioprotect/Rackaton Data"
+CURR_SAMPLE = "SAMPLE_001"
+SAMPLE_ROOT = os.path.join(MAIN_SAMPLES_DIRECTORY, CURR_SAMPLE)
 # Set the directory where you want to save the reports
 # REPORTS_OUTPUT_DIRECTORY = "data/radioprotect/Rakathon Data Organized"
 # -------------------
 
 
 # Load all files of sample organized by frame of reference
+all_files = list(organize_new.process_sample(SAMPLE_ROOT).items())
 sample_name = "SAMPLE_001"
 all_files = organize_new.process_sample(
     os.path.join(MAIN_SAMPLES_DIRECTORY, sample_name))

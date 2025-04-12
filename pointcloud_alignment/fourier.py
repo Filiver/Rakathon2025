@@ -3,7 +3,6 @@ import torch.nn.functional as F
 import SimpleITK as sitk
 import numpy as np
 import moviepy
-from torch_helpers import maxloc
 import pydicom
 
 # dont touch this until necessary
@@ -18,6 +17,15 @@ APPLY_LOG_ON_REFERENCE = True
 REFERENCE_LOG_SCALER = 5.0
 APPLY_LOG_ON_MEASUREMENT = True
 MEASUREMENT_LOG_SCALER = 5.0
+
+
+def maxloc(x: torch.Tensor | np.ndarray) -> tuple:
+    d = x.argmax().item()
+    res = []
+    for s in x.shape[::-1]:
+        d, m = divmod(d, s)
+        res.append(m)
+    return tuple(res)[::-1]
 
 
 def equalize_colored_volume(volume):
@@ -316,7 +324,7 @@ def align_measurement_to_reference_scan(reference_filenames, measurement_filenam
         volumes_to_video(cropped_reference_volume, padded_measurement_volume, "reference_measurement_diff.mp4", fps=10)
     # register the volumes
     print("Registering volumes...")
-    translation = register_volumes_fft(cropped_reference_volume, padded_measurement_volume, "mps")
+    translation = register_volumes_fft(cropped_reference_volume, padded_measurement_volume, "cpu")
     vol_ctr = (torch.tensor(target_shape) - 1) / 2
     translation_tensor = (torch.tensor(translation, dtype=torch.float32) - vol_ctr).floor()
     print("Translation:", translation_tensor)
@@ -347,10 +355,15 @@ def align_measurement_to_reference_scan(reference_filenames, measurement_filenam
 
 if __name__ == "__main__":
     import argparse
+    from pathlib import Path
 
-    DEFAULT_REFERENCE = "data/radioprotect/Organized_CT_Data/SAMPLE_001/2023-06-05/frame_uid_1_2_246_352_221_559666980133719263215614360979762074268"
+    HERE = Path(__file__).parent.parent
+
+    DEFAULT_REFERENCE = (
+        HERE / "data/radioprotect/Organized_CT_Data_Axial/SAMPLE_001/2023-06-05/ref_1_2_246_352_221_559666980133719263215614360979762074268/CT"
+    )
     DEFAULT_MEASUREMENT = (
-        "data/radioprotect/Organized_CT_Data/SAMPLE_001/2023-06-21/frame_uid_1_2_246_352_221_523526543250385987917834924930119139461"
+        HERE / "data/radioprotect/Organized_CT_Data_Axial/SAMPLE_001/2023-06-21/meas_1_2_246_352_221_523526543250385987917834924930119139461/CT"
     )
 
     parser = argparse.ArgumentParser(description="Fourier Transform Registration")
