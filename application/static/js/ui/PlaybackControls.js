@@ -1,10 +1,8 @@
-import { FREQ_CONFIG } from "../config.js";
-
 const buttonHeight = 25;
 export class PlaybackControls {
   constructor(animationController) {
     this.animationController = animationController;
-    this.minRenderDelay = 1000 / FREQ_CONFIG.playbackControls;
+    this.minRenderDelay = 1000 / 15;
     this.lastRenderTime = Number.NEGATIVE_INFINITY;
     this.container = document.createElement("div");
     Object.assign(this.container.style, {
@@ -220,6 +218,18 @@ export class PlaybackControls {
     const progress = currentTime / totalTime;
     this.progressBar.style.width = `${(progress * 100).toFixed(1)}%`;
     this.lastRenderTime = Number.NEGATIVE_INFINITY;
+  }
+
+  /**
+   * Updates the text of the play/pause button based on the animation state.
+   * @param {boolean} isPlaying - Whether the animation is currently playing.
+   */
+  updatePlayButton(isPlaying) {
+    this.playButton.textContent = isPlaying ? "Pause" : "Play";
+  }
+
+  updateSliderAndCounter(frameIndex) {
+    this.updateElements(); // Reuse existing logic to update time and progress bar
   }
 
   forceRedraw() {

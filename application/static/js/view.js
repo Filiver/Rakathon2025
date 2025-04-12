@@ -58,7 +58,7 @@ export class View {
       if (!this.playbackControls) {
         // Append controls to the body or a specific container
         this.playbackControls = new PlaybackControls(
-          this,
+          this.animationController,
           document.body,
           frameCount
         );
@@ -135,8 +135,6 @@ export class View {
       // Initially get available files (optional, depends on workflow)
       socket.emit("get_available_files");
       // Then request the images (assuming we want them immediately)
-      // You might want to trigger this based on user selection later
-      socket.emit("get_images", {}); // Request images
     });
 
     // Listen for available files (if needed for selection later)
@@ -144,6 +142,7 @@ export class View {
       console.log("Received available files");
       this.initFromAvailableFiles(filesData);
       // Potentially update a UI element to show available files here
+      socket.emit("get_images", {}); // Request images
     });
 
     // Listen for the actual image data

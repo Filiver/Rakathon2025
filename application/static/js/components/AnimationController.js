@@ -24,6 +24,8 @@ export class AnimationController {
     this.play = this.play.bind(this);
     this.pause = this.pause.bind(this);
     this.setFrame = this.setFrame.bind(this);
+    this.goToTime = this.goToTime.bind(this); // Bind goToTime
+    this.setSpeed = this.setSpeed.bind(this); // Bind setSpeed
   }
 
   play() {
@@ -68,6 +70,28 @@ export class AnimationController {
         this.view.playbackControls.updateSliderAndCounter(this.currentFrame);
       }
     }
+  }
+
+  /**
+   * Jumps to a specific time in the animation.
+   * @param {number} time - The target time in seconds.
+   */
+  goToTime(time) {
+    const targetFrame = Math.round(time * this.fps);
+    this.setFrame(targetFrame);
+  }
+
+  /**
+   * Sets the playback speed multiplier.
+   * @param {number} speedMultiplier - The desired speed multiplier (e.g., 1 for normal, 2 for double speed).
+   */
+  setSpeed(speedMultiplier) {
+    const baseFps = DEFAULT_FPS; // Assuming DEFAULT_FPS is the 1x speed reference
+    this.fps = baseFps * speedMultiplier;
+    this.interval = 1000 / this.fps;
+    console.log(
+      `Animation speed set to ${speedMultiplier}x (FPS: ${this.fps})`
+    );
   }
 
   nextFrame() {
