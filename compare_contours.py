@@ -171,6 +171,46 @@ def plot_segments(contour, segments, output_file):
     # Save the plot to a file
     plt.savefig(output_file)
 
+def hausdorff_distance_segment(segment1, segment2, contour1, contour2):
+    """
+    Calculates the Hausdorff distance for a pair of segments.
+    """
+    points1 = contour1[segment1]
+    points2 = contour2[segment2]
+    
+    # Compute the distance matrix between the two sets of points
+    dist_matrix = cdist(points1, points2, 'euclidean')
+    
+    # Compute the Hausdorff distance for this pair of segments
+    hausdorff = max(np.min(dist_matrix, axis=1).max(), np.min(dist_matrix, axis=0).max())
+    
+    return hausdorff
+
+def localized_hausdorff_distance(contour1, contour2, segments1, segments2, threshold):
+    """
+    Calculates the localized Hausdorff distance for corresponding segments between two contours.
+    Returns the mean, max Hausdorff distance, and segments exceeding the threshold.
+    """
+    localized_hausdorff_distances = []
+    problematic_segments = []  # To store segments that exceed the threshold
+    
+    # Iterate over corresponding segments from both contours
+    for i, (segment1, segment2) in enumerate(zip(segments1, segments2)):
+        # Calculate the Hausdorff distance for the current pair of segments
+        hd = hausdorff_distance_segment(segment1, segment2, contour1, contour2)
+        localized_hausdorff_distances.append(hd)
+        
+        # Check if the Hausdorff distance exceeds the threshold
+        if hd > threshold:
+            problematic_segments.append(i)  # Append the index of the problematic segment
+    
+    # Aggregate the results: You can change this to np.mean() or np.max() based on your needs
+    mean_hausdorff = np.mean(localized_hausdorff_distances)
+    max_hausdorff = np.max(localized_hausdorff_distances)
+    
+    return mean_hausdorff, max_hausdorff, problematic_segments
+
+
 def compare_contours(c1, c2, type):
     treshold = None
     match type.lower():
@@ -221,5 +261,13 @@ if __name__ == "__main__":
     # Plot the segmented contour
     plot_segments(c1, segments, 'segmented_contour.png')
     print(len(segments), "segments found")
+
+    tresh = 3
+    mean_hd, max_hd, problematic_segments = localized_hausdorff_distance(c1, c2, segments, segments, tresh)
+
+    print(f"Mean Localized Hausdorff Distance: {mean_hd} mm")
+    print(f"Max Localized Hausdorff Distance: {max_hd} mm")
+    print(f"Problematic Segments (Hausdorff > {tresh} mm): {problematic_segments}")
+
 
 
