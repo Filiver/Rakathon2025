@@ -8,6 +8,8 @@ from scipy.spatial import cKDTree
 from scipy.spatial.distance import cdist
 from constants import *
 from scipy.spatial import Delaunay
+from tumor_generator import generate_sphere, generate_biconcave_shape_from_sphere
+
 
 
 def load_contours(file1: str, file2: str) -> Tuple[np.ndarray, np.ndarray]:
@@ -172,6 +174,28 @@ def plot_segments(contour, segments, output_file):
     # Save the plot to a file
     plt.savefig(output_file)
 
+def visualize_segment_difference(segment, contour1, contour2, output_file):
+    """
+    Visualizes the difference between two segments from different contours.
+    """
+    fig = plt.figure()
+    ax = fig.add_subplot(111, projection='3d')
+    
+    # Plot the first segment in blue
+    ax.scatter(*contour1[segment].T, color='blue', label='Segment 1 (Contour 1)', alpha=0.5)
+    
+    # Plot the second segment in red
+    ax.scatter(*contour2[segment].T, color='red', label='Segment 2 (Contour 2)', alpha=0.5)
+    
+    ax.set_xlabel('X')
+    ax.set_ylabel('Y')
+    ax.set_zlabel('Z')
+    ax.set_title('Segment Difference Visualization')
+    ax.legend()
+    
+    # Save the plot to a file
+    plt.savefig(output_file)
+
 def hausdorff_distance_segment(segment1, segment2, contour1, contour2):
     """
     Calculates the Hausdorff distance for a pair of segments.
@@ -234,11 +258,23 @@ def compare_contours(c1, c2, threshold):
     
     ptpd = compute_point_to_point_distance(c1, c2, threshold)
     segments = segment_contour_by_proximity(c1, radius=contour_segmentation_radius)
+    # Filter segments to include only those with 10 or more points
+    filtered_segments = [seg for seg in segments if len(seg) >= 10]
+    print(len(filtered_segments), "segments found with >= 10 points (originally", len(segments), ")")
+    
+    # Check if there are any valid segments left before proceeding
+    if not filtered_segments:
+        print("Warning: No segments with >= 10 points found. Skipping localized Hausdorff distance calculation.")
+        mean_hd, max_hd, problematic_segments = 0, 0, []
+    else:
+        # Use the filtered segments for visualization and distance calculation
+        # Note: visualize_segment_difference might need adjustment if segment indices change
+        # For now, let's visualize the first valid segment if it exists
+        mean_hd, max_hd, problematic_segments = localized_hausdorff_distance(c1, c2, filtered_segments, filtered_segments, threshold)
+        visualize_segment_difference(segments[problematic_segments[0]], c1, c2, 'segment_difference.png')
+        # print(len(problematic_segments[0]), "points in the problematic segment")
 
-    # plot_segments(c1, segments, 'segmented_contour.png')
-    # print(len(segments), "segments found")
-
-    mean_hd, max_hd, problematic_segments = localized_hausdorff_distance(c1, c2, segments, segments, threshold)
+    # plot_segments(c1, filtered_segments, 'segmented_contour.png') # Use filtered_segments if plotting
 
     volume_diff = calculate_volume(c1) - calculate_volume(c2)
     
@@ -297,16 +333,30 @@ if __name__ == "__main__":
     #     sys.exit(1)
 
     # file1, file2 = sys.argv[1], sys.argv[2]
-    file1 = "E:\\radioprotect\original_points.txt"
-    file2 = "E:\\radioprotect\shifted_points.txt"
-    c1, c2 = load_contours(file1, file2)
 
-    print(f"Loaded {len(c1)} points from {file1}")
-    print(f"Loaded {len(c2)} points from {file2}")
+    # ---------------------------------------------------
+    # file1 = "E:\\radioprotect\original_points.txt"
+    # file2 = "E:\\radioprotect\shifted_points.txt"
+    # c1, c2 = load_contours(file1, file2)
 
-    alert_level, reasons = check_contours(c1, c2, "GTV")
-    print(f"Alert Level: {alert_level}")
-    print(f"Reasons: {reasons}")
+    # print(f"Loaded {len(c1)} points from {file1}")
+    # print(f"Loaded {len(c2)} points from {file2}")
+
+    # alert_level, reasons = check_contours(c1, c2, "GTV")
+    # print(f"Alert Level: {alert_level}")
+    # print(f"Reasons: {reasons}")
+    # ---------------------------------------------------
+    contour1 = generate_sphere(num_points=5000)  # Points on the sphere
+    contour2 = generate_biconcave_shape_from_sphere(contour1, deformation_scale=0.5) # Deformed points
+    # plot_contours_3d(contour1, contour2, 'sample_contours_2.png')
+    res = compare_contours(contour1, contour2, 0.2)
+    print(res)
+
+    
+    # alert_level, reasons = check_contours(contour1, contour2, "GTV")
+    # print(f"Alert Level: {alert_level}")
+    # print(f"Reasons: {reasons}")
+
     # plot_contours_3d(c1, c2, 'sample_contours.png')
 
     # metrics_p2pd = compute_point_to_point_distance(c1, c2, 0.5)
@@ -317,10 +367,10 @@ if __name__ == "__main__":
     # print(f"Percentage of points > 3mm: {metrics_p2pd['percentage_above_threshold']:.2f}%")
     # # print(f"Hausdorff Distance: {hausdorff} mm")
 
-    # segments = segment_contour_by_proximity(c1, radius=0.4)
+    # segments = segment_contour_by_proximity(contour2, radius=0.4)
 
     # # Plot the segmented contour
-    # plot_segments(c1, segments, 'segmented_contour.png')
+    # plot_segments(contour2, segments, 'segmented_contour_2.png')
     # print(len(segments), "segments found")
 
     # thresh = 3
