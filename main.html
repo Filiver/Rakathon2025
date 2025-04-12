@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RadioProtect UI</title>
+    <link rel="stylesheet" href="static/styles.css">
+</head>
+<body>
+    <div id="app">
+
+        <!-- Top Bar with Dropdowns and Load Button -->
+        <div id="top-bar">
+            <label for="refCT">Reference CT:</label>
+            <select id="refCT">
+                <option value="ref1">Ref CT 1</option>
+                <option value="ref2">Ref CT 2</option>
+            </select>
+
+            <label for="newCT">New CT:</label>
+            <select id="newCT">
+                <option value="new1">New CT 1</option>
+                <option value="new2">New CT 2</option>
+            </select>
+
+            <button id="loadButton">Load</button>
+        </div>
+
+        <!-- Main Content Area -->
+        <div id="main-view">
+            <!-- Left: Canvases + Slider -->
+            <div id="canvas-slider-wrapper">
+                <div id="canvas-row">
+                    <canvas id="refCanvas"></canvas>
+                    <canvas id="newCanvas"></canvas>
+                </div>
+                <div id="slider-container">
+                    <input type="range" id="sliceSlider" min="0" max="100" value="50">
+                </div>
+            </div>
+
+            <!-- Right Sidebar: Contours and Alert -->
+            <div id="sidebar">
+                <div id="contour-options">
+                    <h3>Contours</h3>
+                    <label><input type="checkbox" checked> Spinal cord</label><br>
+                    <label><input type="checkbox" checked> Esophagus</label><br>
+                    <label><input type="checkbox" checked> GTV</label><br>
+                </div>
+
+                <div id="status-box">
+                    <h4>Status: <span class="status-bad">Mismatch</span></h4>
+                    <p><strong>Reason:</strong><br> GTV shifted significantly in inferior direction. New planning may be required.</p>
+                </div>
+            </div>
+        </div>
+
+    </div>
+</body>
+</html>

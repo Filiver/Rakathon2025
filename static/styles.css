@@ -1,0 +1,140 @@
+/* Reset and Base Styles */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: Arial, sans-serif;
+    background-color: #f7f7f7;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+
+/* App Container */
+#app {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+}
+
+/* Top Bar */
+#top-bar {
+    background-color: #2e3b4e;
+    color: white;
+    padding: 15px;
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+#top-bar label {
+    margin-left: 10px;
+}
+
+#top-bar select, 
+#top-bar button {
+    padding: 6px 12px;
+    font-size: 14px;
+}
+
+/* Main Content Area */
+#main-view {
+    display: flex;
+    flex: 1;
+    padding: 20px;
+    gap: 20px;
+    overflow: hidden;
+}
+
+/* Left: Canvases + Slider */
+#canvas-slider-wrapper {
+    display: flex;
+    flex-direction: column;
+    flex: 3;
+    gap: 10px;
+    align-items: center;
+}
+
+/* Canvases side by side */
+#canvas-row {
+    display: flex;
+    gap: 15px;
+    width: 100%;
+    justify-content: space-between;
+}
+
+#canvas-row canvas {
+    background-color: #ddd;
+    border: 1px solid #aaa;
+    width: 48%;
+    height: 400px;
+}
+
+/* Slider Container */
+#slider-container {
+    display: flex;
+    justify-content: center;
+    padding: 10px 0;
+    width: 100%; /* Make sure the container takes full available width */
+    flex: 0 1 auto; /* Allow the container to grow if needed */
+}
+
+/* Slider itself */
+#sliceSlider {
+    width: 96%; /* Make the slider take almost twice the width of a canvas */
+    max-width: 800px; /* Optional: cap the max width */
+}
+
+/* Right Sidebar */
+#sidebar {
+    flex: 1;
+    width: 250px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    background-color: #fff;
+    padding: 15px;
+    border-left: 1px solid #ccc;
+    box-shadow: 2px 0 5px rgba(0, 0, 0, 0.1);
+}
+
+/* Contour Options */
+#contour-options h3 {
+    margin-bottom: 15px;
+    font-size: 16px;
+    font-weight: bold;
+}
+
+#contour-options label {
+    display: block;
+    margin-bottom: 8px;
+}
+
+/* Status / Alert Box */
+#status-box {
+    margin-top: 20px;
+    padding: 15px;
+    background-color: #fceaea;
+    border: 1px solid #e28c8c;
+    border-radius: 6px;
+    color: #b60000;
+    box-shadow: 0 0 4px rgba(0, 0, 0, 0.1);
+}
+
+#status-box h4 {
+    margin-bottom: 10px;
+    font-size: 1rem;
+}
+
+#status-box p {
+    font-size: 0.9rem;
+    line-height: 1.4;
+}
+
+.status-bad {
+    color: #e74c3c;
+    font-weight: bold;
+}
