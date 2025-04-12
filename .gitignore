@@ -185,3 +185,4 @@ radioprotect/
 *.log
 venv/
 /__pycache__/
+*.mp4
