@@ -17,9 +17,9 @@ all_files = organize_new.process_sample(os.path.join(MAIN_SAMPLES_DIRECTORY, "SA
 scan_to_process_A = all_files.values()[0]
 scan_to_process_B = all_files.values()[1]
 # Align the two scans
-scan_A, scan_B, origin, spacing = align_scans(scan_to_process_A, scan_to_process_B)
+scan_A, scan_B, origin_A, origin_B, spacing = align_scans(scan_to_process_A, scan_to_process_B)
 # Compute measurement contours
 # {contour_name: [(x,y,z), ...]}
-contours = find_countours_in_scan(scan_A, scan_B, origin, spacing)
+contours = find_countours_in_scan(scan_A, scan_B, origin_A, origin_B, spacing)
 
 

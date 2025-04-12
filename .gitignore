@@ -184,3 +184,4 @@ radioprotect/
 *.hprof
 *.log
 venv/
+/__pycache__/
