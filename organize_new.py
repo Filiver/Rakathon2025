@@ -11,7 +11,7 @@ def add_frame_of_reference(output, frame_of_reference, modality, file):
         output[frame_of_reference][modality] = []
     output[frame_of_reference][modality].append(file)
 
-def process_sample(sample_dir):
+def process_sample(sample_dir, verbose=False):
     output = {}
     for item in os.listdir(sample_dir):
         item_path = os.path.join(sample_dir, item)
@@ -32,9 +32,9 @@ def process_sample(sample_dir):
                     #     output[ds.FrameOfReferenceUID][ds.Modality] = []
                     # output[ds.FrameOfReferenceUID][ds.Modality].append(item)
             except InvalidDicomError:
-                print(f"Invalid DICOM file: {item_path}")
+                if verbose: print(f"Invalid DICOM file: {item_path}")
             except Exception as e:
-                print(f"Error processing {item_path}: {e}")
+                if verbose: print(f"Error processing {item_path}: {e}")
     return output
 
 def process_all_samples(main_dir):
@@ -75,7 +75,6 @@ if __name__ == "__main__":
     if "/path/to/" in MAIN_SAMPLES_DIRECTORY or "/path/to/" in REPORTS_OUTPUT_DIRECTORY:
         print("Please update MAIN_SAMPLES_DIRECTORY and REPORTS_OUTPUT_DIRECTORY variables in the script.")
     else:
-        print(os.listdir(os.getcwd()))
         output = process_all_samples(MAIN_SAMPLES_DIRECTORY)
         counts = {}
         for sample in output:
