@@ -68,6 +68,40 @@ def plot_contours_3d(points_a: np.ndarray, points_b: np.ndarray, output_file: st
     plt.close()
 
 
+def compute_point_to_point_distance(contour_a: np.ndarray, contour_b: np.ndarray, threshold_mm: float = 3.0):
+    """
+    Compute point-to-point distances between two 3D point clouds and report statistics.
+
+    Args:
+        contour_a (np.ndarray): First contour (N, 3) array of 3D points
+        contour_b (np.ndarray): Second contour (M, 3) array of 3D points
+        threshold_mm (float): The distance threshold (in mm) to flag large shifts, default is 3.0 mm
+
+    Returns:
+        dict: Statistics of distances:
+            - mean_distance: The average point-to-point distance
+            - max_distance: The maximum point-to-point distance
+            - percentage_above_threshold: Percentage of points with distance > threshold_mm
+    """
+    # Build a KDTree for the second contour
+    tree_b = cKDTree(contour_b)
+
+    # Find the nearest points in contour_b for each point in contour_a
+    distances, _ = tree_b.query(contour_a)
+
+    # Calculate statistics
+    mean_distance = np.mean(distances)
+    max_distance = np.max(distances)
+    percentage_above_threshold = np.sum(distances > threshold_mm) / len(distances) * 100
+
+    # Return the results as a dictionary
+    return {
+        "mean_distance": mean_distance,
+        "max_distance": max_distance,
+        "percentage_above_threshold": percentage_above_threshold
+    }
+
+
 if __name__ == "__main__":
     # import sys
 
@@ -83,5 +117,11 @@ if __name__ == "__main__":
     print(f"Loaded {len(c1)} points from {file1}")
     print(f"Loaded {len(c2)} points from {file2}")
     # plot_contours_3d(c1, c2, 'sample_contours.png')
+
+    metrics = compute_point_to_point_distance(c1, c2, 0.5)
+
+    print(f"Mean distance: {metrics['mean_distance']:.2f} mm")
+    print(f"Max distance: {metrics['max_distance']:.2f} mm")
+    print(f"Percentage of points > 3mm: {metrics['percentage_above_threshold']:.2f}%")
 
 
