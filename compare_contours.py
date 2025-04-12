@@ -6,6 +6,7 @@ from mpl_toolkits.mplot3d import Axes3D
 import numpy as np
 from scipy.spatial import cKDTree
 from scipy.spatial.distance import cdist
+from constants import *
 
 
 def load_contours(file1: str, file2: str) -> Tuple[np.ndarray, np.ndarray]:
@@ -109,6 +110,27 @@ def hausdorff_distance(contour1, contour2):
     dist_matrix = cdist(contour1, contour2, 'euclidean')
     hausdorff = max(np.min(dist_matrix, axis=1).max(), np.min(dist_matrix, axis=0).max())
     return hausdorff
+
+def compare_contours(c1, c2, type):
+    treshold = None
+    match type.lower():
+        case "gtv":
+            threshold = tresh_GTV
+        case "ctv":
+            threshold = tresh_CTV
+        case "ptv":
+            threshold = tresh_PTV
+        case "spinal_cord":
+            threshold = tresh_spinal_cord
+        case "parotid":
+            threshold = tresh_parotid
+        case "submandibular_gland":
+            threshold = tresh_submandibular_gland
+        case "esophagus":
+            threshold = tresh_esophagus
+    if not threshold:
+        raise ValueError(f"Unknown contour type: {type}, possible types: GTV, CTV, PTV, spinal_cord, parotid, submandibular_gland, esophagus")
+    
 
 
 if __name__ == "__main__":
