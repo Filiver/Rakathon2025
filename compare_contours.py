@@ -103,13 +103,46 @@ def compute_point_to_point_distance(contour_a: np.ndarray, contour_b: np.ndarray
         "percentage_above_threshold": percentage_above_threshold
     }
 
-def hausdorff_distance(contour1, contour2):
+def find_neighbors(seed_point, contour, radius):
     """
-    Calculates the Hausdorff distance between two contours.
+    Finds points within a given radius of the seed point.
     """
-    dist_matrix = cdist(contour1, contour2, 'euclidean')
-    hausdorff = max(np.min(dist_matrix, axis=1).max(), np.min(dist_matrix, axis=0).max())
-    return hausdorff
+    # Build a KDTree for efficient nearest neighbor search
+    tree = cKDTree(contour)
+    
+    # Query points within the specified radius
+    indices = tree.query_ball_point(seed_point, radius)
+    
+    return indices
+
+def segment_contour_by_proximity(contour, radius=1.0):
+    """
+    Segments the contour into regions based on proximity.
+    The function iteratively selects seed points and finds neighboring points within a radius.
+    """
+    n = len(contour)
+    unvisited = set(range(n))  # Set of all unvisited points
+    segments = []  # List to hold the resulting segments
+    
+    while unvisited:
+        # Pick an arbitrary seed point (first unvisited point)
+        seed_idx = unvisited.pop()
+        seed_point = contour[seed_idx]
+        
+        # Initialize the segment with the seed point
+        segment = [seed_idx]
+        neighbors = find_neighbors(seed_point, contour, radius)
+        
+        # Add neighbors to the segment and mark them as visited
+        for neighbor_idx in neighbors:
+            if neighbor_idx in unvisited:
+                segment.append(neighbor_idx)
+                unvisited.remove(neighbor_idx)
+        
+        segments.append(segment)
+    
+    return segments
+
 
 def compare_contours(c1, c2, type):
     treshold = None
@@ -131,6 +164,32 @@ def compare_contours(c1, c2, type):
     if not threshold:
         raise ValueError(f"Unknown contour type: {type}, possible types: GTV, CTV, PTV, spinal_cord, parotid, submandibular_gland, esophagus")
     
+def plot_segments(contour, segments, output_file):
+    """
+    Plots the contour points in 3D, with each segment in a different random color.
+    Saves the plot to a file.
+    """
+    fig = plt.figure()
+    ax = fig.add_subplot(111, projection='3d')
+
+    for i, segment in enumerate(segments):
+        segment_points = contour[segment]
+        
+        # Generate a random color for each segment
+        color = np.random.rand(3,)
+        
+        ax.scatter(segment_points[:, 0], segment_points[:, 1], segment_points[:, 2], color=color.tolist(), label=f'Segment {i+1}')
+
+    ax.set_xlabel('X')
+    ax.set_ylabel('Y')
+    ax.set_zlabel('Z')
+    ax.set_title('Contour Segmentation')
+    ax.legend()
+    
+    # Save the plot to a file
+    plt.savefig(output_file)
+
+
 
 
 if __name__ == "__main__":
@@ -150,11 +209,17 @@ if __name__ == "__main__":
     # plot_contours_3d(c1, c2, 'sample_contours.png')
 
     metrics_p2pd = compute_point_to_point_distance(c1, c2, 0.5)
-    hausdorff = hausdorff_distance(c1, c2)
+    # hausdorff = hausdorff_distance(c1, c2)
 
     print(f"Mean distance: {metrics_p2pd['mean_distance']:.2f} mm")
     print(f"Max distance: {metrics_p2pd['max_distance']:.2f} mm")
     print(f"Percentage of points > 3mm: {metrics_p2pd['percentage_above_threshold']:.2f}%")
-    print(f"Hausdorff Distance: {hausdorff} mm")
+    # print(f"Hausdorff Distance: {hausdorff} mm")
+
+    segments = segment_contour_by_proximity(c1, radius=0.4)
+
+    # Plot the segmented contour
+    plot_segments(c1, segments, 'segmented_contour.png')
+    print(len(segments), "segments found")
 
 
