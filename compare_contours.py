@@ -71,7 +71,7 @@ def plot_contours_3d(points_a: np.ndarray, points_b: np.ndarray, output_file: st
     plt.close()
 
 
-def compute_point_to_point_distance(contour_a: np.ndarray, contour_b: np.ndarray, threshold_mm: float = 3.0):
+def compute_point_to_point_distance(contour_a: np.ndarray, contour_b: np.ndarray, threshold: float):
     """
     Compute point-to-point distances between two 3D point clouds and report statistics.
 
@@ -95,7 +95,7 @@ def compute_point_to_point_distance(contour_a: np.ndarray, contour_b: np.ndarray
     # Calculate statistics
     mean_distance = np.mean(distances)
     max_distance = np.max(distances)
-    percentage_above_threshold = np.sum(distances > threshold_mm) / len(distances) * 100
+    percentage_above_threshold = np.sum(distances > threshold) / len(distances) * 100
 
     # Return the results as a dictionary
     return {
@@ -228,25 +228,7 @@ def calculate_volume(contour):
     
     return total_volume
 
-def compare_contours(c1, c2, type):
-    treshold = None
-    match type.lower():
-        case "gtv":
-            threshold = tresh_GTV
-        case "ctv":
-            threshold = tresh_CTV
-        case "ptv":
-            threshold = tresh_PTV
-        case "spinal_cord":
-            threshold = tresh_spinal_cord
-        case "parotid":
-            threshold = tresh_parotid
-        case "submandibular_gland":
-            threshold = tresh_submandibular_gland
-        case "esophagus":
-            threshold = tresh_esophagus
-    if not threshold:
-        raise ValueError(f"Unknown contour type: {type}, possible types: GTV, CTV, PTV, spinal_cord, parotid, submandibular_gland, esophagus")
+def compare_contours(c1, c2, threshold):
     
     # print(f"Using threshold: {threshold} mm")
     
@@ -273,8 +255,39 @@ def compare_contours(c1, c2, type):
     }
 
 def check_contours(c1, c2, type):
-    comp = compare_contours(c1, c2, type)
+    threshold = None
+    match type.lower():
+        case "gtv":
+            threshold = thresh_GTV
+        case "ctv":
+            threshold = thresh_CTV
+        case "ptv":
+            threshold = thresh_PTV
+        case "spinal_cord":
+            threshold = thresh_spinal_cord
+        case "parotid":
+            threshold = thresh_parotid
+        case "submandibular_gland":
+            threshold = thresh_submandibular_gland
+        case "esophagus":
+            threshold = thresh_esophagus
+    if threshold is None:
+        raise ValueError(f"Unknown contour type: {type}, possible types: GTV, CTV, PTV, spinal_cord, parotid, submandibular_gland, esophagus")
 
+    comp = compare_contours(c1, c2, threshold)
+
+    alert_level = OK
+    reasons = []
+
+    if comp['mean_point_to_point_distance'] > threshold + error_margin:
+        alert_level = REPLANNING_NEEDED
+        reasons.append('Mean point-to-point distance exceeds threshold')
+    elif comp['mean_point_to_point_distance'] > threshold - error_margin:
+        alert_level = DOCTOR_REVIEW
+        reasons.append('Mean point-to-point distance is close to threshold')
+    
+    return alert_level, reasons
+    
 
 if __name__ == "__main__":
     # import sys
@@ -291,7 +304,9 @@ if __name__ == "__main__":
     print(f"Loaded {len(c1)} points from {file1}")
     print(f"Loaded {len(c2)} points from {file2}")
 
-    res = check_contours
+    alert_level, reasons = check_contours(c1, c2, "GTV")
+    print(f"Alert Level: {alert_level}")
+    print(f"Reasons: {reasons}")
     # plot_contours_3d(c1, c2, 'sample_contours.png')
 
     # metrics_p2pd = compute_point_to_point_distance(c1, c2, 0.5)
@@ -308,12 +323,12 @@ if __name__ == "__main__":
     # plot_segments(c1, segments, 'segmented_contour.png')
     # print(len(segments), "segments found")
 
-    # tresh = 3
-    # mean_hd, max_hd, problematic_segments = localized_hausdorff_distance(c1, c2, segments, segments, tresh)
+    # thresh = 3
+    # mean_hd, max_hd, problematic_segments = localized_hausdorff_distance(c1, c2, segments, segments, thresh)
 
     # print(f"Mean Localized Hausdorff Distance: {mean_hd} mm")
     # print(f"Max Localized Hausdorff Distance: {max_hd} mm")
-    # print(f"Problematic Segments (Hausdorff > {tresh} mm): {problematic_segments}")
+    # print(f"Problematic Segments (Hausdorff > {thresh} mm): {problematic_segments}")
 
     # volume = calculate_volume(c1)
     # print(f"Estimated Volume: {volume}")
