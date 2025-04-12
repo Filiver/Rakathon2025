@@ -9,7 +9,7 @@ from scipy.spatial.distance import cdist
 from constants import *
 from scipy.spatial import Delaunay
 from tumor_generator import generate_sphere, generate_biconcave_shape_from_sphere
-
+from logger import log_treatment_check, log_doctor_review, replanning_needed, log_treatment_proceeded
 
 
 def load_contours(file1: str, file2: str) -> Tuple[np.ndarray, np.ndarray]:
@@ -271,7 +271,7 @@ def compare_contours(c1, c2, threshold):
         # Note: visualize_segment_difference might need adjustment if segment indices change
         # For now, let's visualize the first valid segment if it exists
         mean_hd, max_hd, problematic_segments = localized_hausdorff_distance(c1, c2, filtered_segments, filtered_segments, threshold)
-        visualize_segment_difference(segments[problematic_segments[0]], c1, c2, 'segment_difference.png')
+        # visualize_segment_difference(segments[problematic_segments[0]], c1, c2, 'segment_difference.png')
         # print(len(problematic_segments[0]), "points in the problematic segment")
 
     # plot_segments(c1, filtered_segments, 'segmented_contour.png') # Use filtered_segments if plotting
@@ -290,7 +290,7 @@ def compare_contours(c1, c2, threshold):
         'volume_difference': volume_diff,
     }
 
-def check_contours(c1, c2, type):
+def check_contours(c1, c2, type, log=False, print_comparison=False):
     threshold = None
     match type.lower():
         case "gtv":
@@ -311,6 +311,8 @@ def check_contours(c1, c2, type):
         raise ValueError(f"Unknown contour type: {type}, possible types: GTV, CTV, PTV, spinal_cord, parotid, submandibular_gland, esophagus")
 
     comp = compare_contours(c1, c2, threshold)
+    if print_comparison:
+        print(comp)
 
     alert_level = OK
     reasons = []
@@ -321,6 +323,19 @@ def check_contours(c1, c2, type):
     elif comp['mean_point_to_point_distance'] > threshold - error_margin:
         alert_level = DOCTOR_REVIEW
         reasons.append('Mean point-to-point distance is close to threshold')
+    
+    if log:
+        if alert_level == OK:
+            log_treatment_check('T042', 'P001', 'OK', 'Contour check passed')
+            log_treatment_proceeded('D042', 'P001', 'OK')
+        elif alert_level == DOCTOR_REVIEW:
+            log_treatment_check('T042', 'P001', 'DOCTOR_REVIEW', 'Contour check requires doctor review, reasons: ' + ', '.join(reasons))
+            log_doctor_review('D012', 'P001', 'T042', 'ACCEPT', 'After review treatment accepted')
+            log_treatment_proceeded('D042', 'P001', 'DOCTOR_REVIEW')
+        elif alert_level == REPLANNING_NEEDED:
+            log_treatment_check('T042', 'P001', 'REPLANNING_NEEDED', 'Contour check requires replanning, dangerous contours detected, reasons: ' + ', '.join(reasons))
+            replanning_needed('T042', 'P001', 'Contour check requires replanning, dangerous contours detected')
+            
     
     return alert_level, reasons
     
@@ -348,14 +363,16 @@ if __name__ == "__main__":
     # ---------------------------------------------------
     contour1 = generate_sphere(num_points=5000)  # Points on the sphere
     contour2 = generate_biconcave_shape_from_sphere(contour1, deformation_scale=0.5) # Deformed points
-    # plot_contours_3d(contour1, contour2, 'sample_contours_2.png')
-    res = compare_contours(contour1, contour2, 0.2)
-    print(res)
+    # # plot_contours_3d(contour1, contour2, 'sample_contours_2.png')
+    # res = compare_contours(contour1, contour2, 0.2)
+    # print(res)
+
+
 
     
-    # alert_level, reasons = check_contours(contour1, contour2, "GTV")
-    # print(f"Alert Level: {alert_level}")
-    # print(f"Reasons: {reasons}")
+    alert_level, reasons = check_contours(contour1, contour2, "GTV", log=True, print_comparison=True)
+    print(f"Alert Level: {alert_level}")
+    print(f"Reasons: {reasons}")
 
     # plot_contours_3d(c1, c2, 'sample_contours.png')
 

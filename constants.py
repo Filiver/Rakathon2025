@@ -1,5 +1,5 @@
 # thresholds in mm
-thresh_GTV = 3
+thresh_GTV = 0.2
 thresh_CTV = 3
 thresh_PTV = 3
 thresh_spinal_cord = 3
@@ -15,3 +15,5 @@ error_margin = 0.5
 OK = 0
 DOCTOR_REVIEW = 1
 REPLANNING_NEEDED = 2
+
+LOG_FILE_PATH = 'log.txt'
