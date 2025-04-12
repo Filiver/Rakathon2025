@@ -344,7 +344,7 @@ def process_all_samples(main_dir, output_dir):
 
 if __name__ == "__main__":
     # Basic check if paths are default/placeholder
-    if "/path/to/" in MAIN_SAMPLES_DIRECTORY or "/path/to/" in ORGANIZED_OUTPUT_DIRECTORY:
+    if "/path/to/" in str(MAIN_SAMPLES_DIRECTORY) or "/path/to/" in str(ORGANIZED_OUTPUT_DIRECTORY):
         print("Please update MAIN_SAMPLES_DIRECTORY and ORGANIZED_OUTPUT_DIRECTORY variables in the script.", file=sys.stderr)
     else:
         process_all_samples(MAIN_SAMPLES_DIRECTORY, ORGANIZED_OUTPUT_DIRECTORY)
