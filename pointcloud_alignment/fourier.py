@@ -324,7 +324,7 @@ def align_measurement_to_reference_scan(reference_filenames, measurement_filenam
         volumes_to_video(cropped_reference_volume, padded_measurement_volume, "reference_measurement_diff.mp4", fps=10)
     # register the volumes
     print("Registering volumes...")
-    translation = register_volumes_fft(cropped_reference_volume, padded_measurement_volume, "mps")
+    translation = register_volumes_fft(cropped_reference_volume, padded_measurement_volume, "cpu")
     vol_ctr = (torch.tensor(target_shape) - 1) / 2
     translation_tensor = (torch.tensor(translation, dtype=torch.float32) - vol_ctr).floor()
     print("Translation:", translation_tensor)
