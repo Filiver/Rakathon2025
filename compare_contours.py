@@ -247,6 +247,33 @@ def compare_contours(c1, c2, type):
             threshold = tresh_esophagus
     if not threshold:
         raise ValueError(f"Unknown contour type: {type}, possible types: GTV, CTV, PTV, spinal_cord, parotid, submandibular_gland, esophagus")
+    
+    # print(f"Using threshold: {threshold} mm")
+    
+    ptpd = compute_point_to_point_distance(c1, c2, threshold)
+    segments = segment_contour_by_proximity(c1, radius=contour_segmentation_radius)
+
+    # plot_segments(c1, segments, 'segmented_contour.png')
+    # print(len(segments), "segments found")
+
+    mean_hd, max_hd, problematic_segments = localized_hausdorff_distance(c1, c2, segments, segments, threshold)
+
+    volume_diff = calculate_volume(c1) - calculate_volume(c2)
+    
+
+    return {
+        'mean_point_to_point_distance': ptpd['mean_distance'],
+        'max_point_to_point_distance': ptpd['max_distance'],
+        'percentage_above_ptp_threshold': ptpd['percentage_above_threshold'],
+        'mean_localized_hausdorff_distance': mean_hd,
+        'max_localized_hausdorff_distance': max_hd,
+        'problematic_segments': problematic_segments,
+        'problematic_segments_count': len(problematic_segments),
+        'volume_difference': volume_diff,
+    }
+
+def check_contours(c1, c2, type):
+    comp = compare_contours(c1, c2, type)
 
 
 if __name__ == "__main__":
@@ -263,31 +290,33 @@ if __name__ == "__main__":
 
     print(f"Loaded {len(c1)} points from {file1}")
     print(f"Loaded {len(c2)} points from {file2}")
+
+    res = check_contours
     # plot_contours_3d(c1, c2, 'sample_contours.png')
 
-    metrics_p2pd = compute_point_to_point_distance(c1, c2, 0.5)
-    # hausdorff = hausdorff_distance(c1, c2)
+    # metrics_p2pd = compute_point_to_point_distance(c1, c2, 0.5)
+    # # hausdorff = hausdorff_distance(c1, c2)
 
-    print(f"Mean distance: {metrics_p2pd['mean_distance']:.2f} mm")
-    print(f"Max distance: {metrics_p2pd['max_distance']:.2f} mm")
-    print(f"Percentage of points > 3mm: {metrics_p2pd['percentage_above_threshold']:.2f}%")
-    # print(f"Hausdorff Distance: {hausdorff} mm")
+    # print(f"Mean distance: {metrics_p2pd['mean_distance']:.2f} mm")
+    # print(f"Max distance: {metrics_p2pd['max_distance']:.2f} mm")
+    # print(f"Percentage of points > 3mm: {metrics_p2pd['percentage_above_threshold']:.2f}%")
+    # # print(f"Hausdorff Distance: {hausdorff} mm")
 
-    segments = segment_contour_by_proximity(c1, radius=0.4)
+    # segments = segment_contour_by_proximity(c1, radius=0.4)
 
-    # Plot the segmented contour
-    plot_segments(c1, segments, 'segmented_contour.png')
-    print(len(segments), "segments found")
+    # # Plot the segmented contour
+    # plot_segments(c1, segments, 'segmented_contour.png')
+    # print(len(segments), "segments found")
 
-    tresh = 3
-    mean_hd, max_hd, problematic_segments = localized_hausdorff_distance(c1, c2, segments, segments, tresh)
+    # tresh = 3
+    # mean_hd, max_hd, problematic_segments = localized_hausdorff_distance(c1, c2, segments, segments, tresh)
 
-    print(f"Mean Localized Hausdorff Distance: {mean_hd} mm")
-    print(f"Max Localized Hausdorff Distance: {max_hd} mm")
-    print(f"Problematic Segments (Hausdorff > {tresh} mm): {problematic_segments}")
+    # print(f"Mean Localized Hausdorff Distance: {mean_hd} mm")
+    # print(f"Max Localized Hausdorff Distance: {max_hd} mm")
+    # print(f"Problematic Segments (Hausdorff > {tresh} mm): {problematic_segments}")
 
-    volume = calculate_volume(c1)
-    print(f"Estimated Volume: {volume}")
+    # volume = calculate_volume(c1)
+    # print(f"Estimated Volume: {volume}")
 
 
 
