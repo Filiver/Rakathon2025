@@ -143,6 +143,33 @@ def segment_contour_by_proximity(contour, radius=1.0):
     
     return segments
 
+    
+def plot_segments(contour, segments, output_file):
+    """
+    Plots the contour points in 3D, with each segment in a different random color.
+    Saves the plot to a file.
+    """
+    fig = plt.figure()
+    ax = fig.add_subplot(111, projection='3d')
+
+    for i, segment in enumerate(segments):
+        # Use the indices from the segment to get the corresponding points in the contour
+        segment_points = contour[segment]
+        
+        # Generate a random color for each segment
+        color = np.random.rand(3,)
+        
+        ax.scatter(segment_points[:, 0], segment_points[:, 1], segment_points[:, 2], 
+                   color=color.tolist(), label=f'Segment {i+1}')
+
+    ax.set_xlabel('X')
+    ax.set_ylabel('Y')
+    ax.set_zlabel('Z')
+    ax.set_title('Contour Segmentation')
+    ax.legend()
+    
+    # Save the plot to a file
+    plt.savefig(output_file)
 
 def compare_contours(c1, c2, type):
     treshold = None
@@ -163,33 +190,6 @@ def compare_contours(c1, c2, type):
             threshold = tresh_esophagus
     if not threshold:
         raise ValueError(f"Unknown contour type: {type}, possible types: GTV, CTV, PTV, spinal_cord, parotid, submandibular_gland, esophagus")
-    
-def plot_segments(contour, segments, output_file):
-    """
-    Plots the contour points in 3D, with each segment in a different random color.
-    Saves the plot to a file.
-    """
-    fig = plt.figure()
-    ax = fig.add_subplot(111, projection='3d')
-
-    for i, segment in enumerate(segments):
-        segment_points = contour[segment]
-        
-        # Generate a random color for each segment
-        color = np.random.rand(3,)
-        
-        ax.scatter(segment_points[:, 0], segment_points[:, 1], segment_points[:, 2], color=color.tolist(), label=f'Segment {i+1}')
-
-    ax.set_xlabel('X')
-    ax.set_ylabel('Y')
-    ax.set_zlabel('Z')
-    ax.set_title('Contour Segmentation')
-    ax.legend()
-    
-    # Save the plot to a file
-    plt.savefig(output_file)
-
-
 
 
 if __name__ == "__main__":
