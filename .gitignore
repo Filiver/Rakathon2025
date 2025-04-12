@@ -178,3 +178,10 @@ pyrightconfig.json
 contours*
 data
 .DS_Store
+radioprotect/
+.idea/
+*.iml
+*.hprof
+*.log
+venv/
+/__pycache__/
