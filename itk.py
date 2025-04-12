@@ -69,10 +69,12 @@ def load_rtstruct_contours(rtstruct_path):
             sop_uid = contour.ContourImageSequence[0].ReferencedSOPInstanceUID
             coords = np.array(contour.ContourData).reshape(-1, 3)
 
-            if sop_uid not in contour_map:
+            if roi_name not in contour_map:
                 contour_map[sop_uid] = []
+                #contour_map[roi_name] = coords
 
             contour_map[sop_uid].append((roi_name, coords))
+            #contour_map[roi_name] = np.vstack((contour_map[roi_name], coords))
 
     return contour_map
 
@@ -462,9 +464,11 @@ def process_rt_ct_pairs(base_dir, cts, rs):
             for rs_path in rs_paths:
                 new_contours = load_rtstruct_contours(rs_path)
                 for sop_uid, contours in new_contours.items():
-                    if sop_uid not in contour_map:
-                        contour_map[sop_uid] = []
-                    contour_map[sop_uid].extend(contours)
+                    for roi_name, coords in contours:
+                        if roi_name not in contour_map:
+                            contour_map[roi_name] = coords
+                        else:
+                            contour_map[roi_name] = np.vstack((contour_map[roi_name], coords))
             return contour_map
         else:
             print(f"Missing RS or CT files for RS: {rs_files}")

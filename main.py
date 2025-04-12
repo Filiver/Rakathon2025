@@ -1,7 +1,6 @@
-import organize_new
 import os
 from pointcloud_alignment.fourier import align_measurement_to_reference_scan, dicom_filenames_from_dir
-from contours_finder import find_contours_in_meas
+from contours_finder import find_all_contours_in_meas
 from itk import process_rt_ct_pairs
 from pathlib import Path
 
@@ -39,7 +38,11 @@ alignment_results = align_measurement_to_reference_scan(
 # Compute measurement contours
 # {contour_name: [(x,y,z), ...]}
 contours_dict_ref = process_rt_ct_pairs(scan_to_process_ref, *load_data(scan_to_process_ref))
-contours_dict, contours_torch = find_contours_in_meas(
+print(contours_dict_ref.keys())
+a = contours_dict_ref[list(contours_dict_ref.keys())[0]]
+print(a)
+print(a.shape)
+contours_meas_torch_dict = find_all_contours_in_meas(
     alignment_results["reference"],
     alignment_results["measurement"],
     contours_dict_ref

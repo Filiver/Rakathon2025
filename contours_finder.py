@@ -85,7 +85,11 @@ def find_contours_in_meas(scan_ref, scan_meas, contours_xyz):
         [W - 1, H - 1, D - 1], device=theta.device, dtype=torch.float32)
 
     # Original contours must be float for transformations and grid_sample
-    contours_xyz_float = contours_xyz.float()
+    print(f"contours_xyz shape: {contours_xyz.shape}")
+    print(f"contours_xyz dtype: {contours_xyz.dtype}")
+
+    contours_xyz_float = torch.tensor(contours_xyz).float()
+    # contours_xyz_float = contours_xyz.float()
     # --- End Changes ---
 
     for i in range(10000):  # Or increased iterations
@@ -158,6 +162,13 @@ def find_contours_in_meas(scan_ref, scan_meas, contours_xyz):
 
     return transformed_contours  # Return float coordinates
 
+def find_all_contours_in_meas(scan_ref, scan_meas, contours_dict):
+    transformed_contours_dict = {}
+    for roi_name, contours_xyz in contours_dict.items():
+        transformed_contours = find_contours_in_meas(
+            scan_ref, scan_meas, contours_xyz)
+        transformed_contours_dict[roi_name] = transformed_contours
+    return transformed_contours_dict
 
 # --- Example of how to use the function ---
 # Note: This requires load_contours_from_txt and actual scan/contour data
