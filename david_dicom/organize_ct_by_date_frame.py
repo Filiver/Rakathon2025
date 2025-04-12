@@ -13,7 +13,7 @@ HERE = Path(__file__).parent.parent
 
 # --- Configuration ---
 # Set the main directory containing your sample folders (e.g., SAMPLE_001, SAMPLE_002)
-MAIN_SAMPLES_DIRECTORY = HERE / "data/radioprotect/Rackaton Data"
+MAIN_SAMPLES_DIRECTORY = HERE / "data/radioprotect/Rakathon Data"
 # Set the base directory where the organized structure will be created
 ORGANIZED_OUTPUT_DIRECTORY = HERE / "data/radioprotect/Organized_CT_Data_Axial"
 # Set to True to copy files, False to print actions without copying (for testing)
