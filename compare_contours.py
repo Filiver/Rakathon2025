@@ -7,6 +7,7 @@ import numpy as np
 from scipy.spatial import cKDTree
 from scipy.spatial.distance import cdist
 from constants import *
+from scipy.spatial import Delaunay
 
 
 def load_contours(file1: str, file2: str) -> Tuple[np.ndarray, np.ndarray]:
@@ -210,6 +211,22 @@ def localized_hausdorff_distance(contour1, contour2, segments1, segments2, thres
     
     return mean_hausdorff, max_hausdorff, problematic_segments
 
+def tetrahedron_volume(p1, p2, p3, p4):
+    # Using the determinant method to calculate the volume of the tetrahedron
+    return abs(np.dot(p1 - p4, np.cross(p2 - p4, p3 - p4))) / 6.0
+
+def calculate_volume(contour):
+    # Perform Delaunay triangulation on the contour
+    delaunay = Delaunay(contour)
+    
+    total_volume = 0
+    # Iterate over the simplices (tetrahedra) in the Delaunay triangulation
+    for simplex in delaunay.simplices:
+        # Get the 4 points defining the tetrahedron
+        p1, p2, p3, p4 = contour[simplex]
+        total_volume += tetrahedron_volume(p1, p2, p3, p4)
+    
+    return total_volume
 
 def compare_contours(c1, c2, type):
     treshold = None
@@ -268,6 +285,9 @@ if __name__ == "__main__":
     print(f"Mean Localized Hausdorff Distance: {mean_hd} mm")
     print(f"Max Localized Hausdorff Distance: {max_hd} mm")
     print(f"Problematic Segments (Hausdorff > {tresh} mm): {problematic_segments}")
+
+    volume = calculate_volume(c1)
+    print(f"Estimated Volume: {volume}")
 
 
 
