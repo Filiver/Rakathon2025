@@ -1,6 +1,10 @@
-radioprotect/
+data/
 .idea/
 *.iml
 *.hprof
 *.log
 venv/
+plots/
+pointclouds_by_rs/
+sphere_points/
+radioprotect/
