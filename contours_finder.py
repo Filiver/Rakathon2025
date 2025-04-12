@@ -92,7 +92,7 @@ def find_contours_in_meas(scan_ref, scan_meas, contours_xyz):
     # contours_xyz_float = contours_xyz.float()
     # --- End Changes ---
 
-    for i in range(10000):  # Or increased iterations
+    for i in range(100):  # Or increased iterations
         optimizer.zero_grad()
 
         # Calculate transformed contours (keep as float)

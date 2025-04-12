@@ -15,7 +15,7 @@ ROI_intrested = [
     re.compile(r"spinalcord"),
     re.compile(r"parotid*"),
     re.compile(r"submandibular*"),
-    re.compile(r"ezophagus*"),
+    re.compile(r"esophagus*"),
     re.compile(r"glnd_submand*"),
 ]
 

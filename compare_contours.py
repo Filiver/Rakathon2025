@@ -292,23 +292,24 @@ def compare_contours(c1, c2, threshold: float) -> dict:
 
 def check_contours(c1, c2, type: str, log: bool=False, print_comparison: bool=False) -> Tuple[int, list]:
     threshold = None
-    match type.lower():
-        case "gtv":
-            threshold = thresh_GTV
-        case "ctv":
-            threshold = thresh_CTV
-        case "ptv":
-            threshold = thresh_PTV
-        case "spinal_cord":
-            threshold = thresh_spinal_cord
-        case "parotid":
-            threshold = thresh_parotid
-        case "submandibular_gland":
-            threshold = thresh_submandibular_gland
-        case "esophagus":
-            threshold = thresh_esophagus
+
+    if type.startswith("gtv"):
+        threshold = thresh_GTV
+    elif type.startswith("ctv"):
+        threshold = thresh_CTV
+    elif type.startswith("ptv"):
+        threshold = thresh_PTV
+    elif "spinalcord" in type:
+        threshold = thresh_spinal_cord
+    elif "parotid" in type:
+        threshold = thresh_parotid
+    elif "submandibular" in type or "glnd_submand" in type:
+        threshold = thresh_submandibular_gland
+    elif "esophagus" in type:
+        threshold = thresh_esophagus
+
     if threshold is None:
-        raise ValueError(f"Unknown contour type: {type}, possible types: GTV, CTV, PTV, spinal_cord, parotid, submandibular_gland, esophagus")
+        raise ValueError(f"Unknown contour type: {type}, possible types: GTV, CTV, PTV, spinalcord, parotid, submandibulargland, esophagus")
 
     comp = compare_contours(c1, c2, threshold)
     if print_comparison:
@@ -339,6 +340,17 @@ def check_contours(c1, c2, type: str, log: bool=False, print_comparison: bool=Fa
     
     return alert_level, reasons
     
+def check_all_contours(contours_dict_ref, contours_meas_torch_dict):
+    output = {}
+    for contour_name, contour_points in contours_dict_ref.items():
+        contour_meas_points = contours_meas_torch_dict[contour_name]
+        alert_level, reasons = check_contours(contour_points, contour_meas_points, contour_name)
+        print(f"Contour: {contour_name}, Alert Level: {alert_level}, Reasons: {reasons}")
+        output[contour_name] = {
+            "alert_level": alert_level,
+            "reasons": reasons
+        }
+    return output
 
 if __name__ == "__main__":
     # import sys
