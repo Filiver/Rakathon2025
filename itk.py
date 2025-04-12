@@ -5,6 +5,7 @@ import numpy as np
 import regex as re
 import SimpleITK as sitk
 import scipy.ndimage as ndi
+from organize_new import process_sample
 
 ROI_intrested = [
     re.compile(r"^gtv.*"),
@@ -357,32 +358,50 @@ def plot_ct_with_contours(ds, contours, img_dir, txt_dir):
 
 
 def process_each_rs_separately(base_dir, report_path, output_dir="pointclouds_by_rs"):
-    rs_mapping = parse_report_file(report_path)
+    # rs_mapping = parse_report_file(report_path)
+    rs_mapping = process_sample(base_dir)
+    print("Keys in rs_mapping:", rs_mapping.keys())
+    exit(0)
+    cts = rs_mapping["CT"]
+    rs = rs_mapping["RS"]
+    print(f"Found {len(rs_mapping)} RS files with CT references.")
+    exit(0)
 
-    for rs_file, ct_files in rs_mapping.items():
+    for rs_files, ct_files in rs_mapping.items():
         ct_paths = []
+        rs_paths = []
         rs_path = None
         for root, _, files in os.walk(base_dir):
             for file in files:
-                if file == rs_file:
-                    rs_path = os.path.join(root, file)
+                if file in rs_files:
+                    # rs_path = os.path.join(root, file)
+                    rs_paths.append(os.path.join(root, file))
                 elif file in ct_files:
                     ct_paths.append(os.path.join(root, file))
 
-        if rs_path and ct_paths:
+        if rs_paths and ct_paths:
+            rs_files_combined = str.join(rs_files)
             rs_output_dir = os.path.join(
-                output_dir, rs_file.replace('.dcm', ''))
+                output_dir, rs_files_combined.replace(".dcm", "").replace(" ", "_"))
+            os.makedirs(rs_output_dir, exist_ok=True)
             img_dir = os.path.join(rs_output_dir, "imgs")
             txt_dir = os.path.join(rs_output_dir, "txt")
 
             os.makedirs(img_dir, exist_ok=True)
             os.makedirs(txt_dir, exist_ok=True)
 
-            print(f"Processing RS: {rs_file} with {len(ct_paths)} CT files")
             ct_datasets = [pydicom.dcmread(path) for path in sorted(
                 ct_paths, key=lambda x: pydicom.dcmread(x).ImagePositionPatient[2])]
 
-            contour_map = load_rtstruct_contours(rs_path)
+            contour_map = {}
+            for rs_path in rs_paths:
+                new_contours = load_rtstruct_contours(rs_path)
+                for sop_uid, contours in new_contours.items():
+                    if sop_uid not in contour_map:
+                        contour_map[sop_uid] = []
+                    contour_map[sop_uid].extend(contours)
+
+                # contour_map = load_rtstruct_contours(rs_path)
             for ds in ct_datasets:
                 sop_uid = ds.SOPInstanceUID
                 contours = contour_map.get(sop_uid, [])
@@ -391,11 +410,11 @@ def process_each_rs_separately(base_dir, report_path, output_dir="pointclouds_by
             point_cloud = generate_volume_point_cloud(ct_datasets)
             visualize_point_cloud(point_cloud)
 
-            out_path = os.path.join(rs_output_dir, f"{rs_file}_pointcloud.npy")
+            out_path = os.path.join(rs_output_dir, f"{rs_files_combined}.npy")
             np.save(out_path, point_cloud)
             print(f"Saved point cloud: {out_path}")
         else:
-            print(f"Missing RS or CT files for RS: {rs_file}")
+            print(f"Missing RS or CT files for RS: {rs_files}")
 
 
 if __name__ == "__main__":
