@@ -113,7 +113,7 @@ def load_ordered_ct_series_from_directory(dicom_dir):
     return ordered_datasets
 
 
-def generate_volume_point_cloud(ct_datasets, rgb=True, mask=False):
+def generate_volume_point_cloud(ct_datasets, rgb=True, mask=True):
     import matplotlib.cm as cm
     points_list = []
     valid_cts = []
@@ -157,7 +157,7 @@ def generate_volume_point_cloud(ct_datasets, rgb=True, mask=False):
         x = np.arange(cols)
         y = np.arange(rows)
         xx, yy = np.meshgrid(x, y)
-        print(f"xx: {xx.shape}, yy: {yy.shape}")
+        # print(f"xx: {xx.shape}, yy: {yy.shape}")
 
         coords_x = origin[0] + xx * spacing[0]
         coords_y = origin[1] + yy * spacing[1]  # flipped
@@ -335,9 +335,12 @@ def plot_ct_with_contours(ds, contours, img_dir, txt_dir):
     txt_lines = []
 
     for roi_name, coords in contours:
+        # Plotting
         ij = ((coords[:, :2] - origin[:2]) / spacing[:2]).astype(int)
         ax.plot(ij[:, 0], ij[:, 1], label=roi_name, linewidth=1)
-        points_str = " ".join(f"{x},{y}" for x, y in ij)
+
+        # Saving coordinates as real-world 3D coordinates (x,y,z)
+        points_str = " ".join(f"{x:.2f},{y:.2f},{z:.2f}" for x, y, z in coords)
         txt_lines.append(f"{roi_name}: {points_str}")
 
     if contours:
@@ -353,21 +356,23 @@ def plot_ct_with_contours(ds, contours, img_dir, txt_dir):
     with open(txt_path, "w") as f:
         f.write("\n".join(txt_lines))
 
-    print(f"Saved image: {png_path}")
-    print(f"Saved contours: {txt_path}")
-
 
 def process_each_rs_separately(base_dir, report_path, output_dir="pointclouds_by_rs"):
-    # rs_mapping = parse_report_file(report_path)
+    output_dir = os.path.join(output_dir, os.path.basename(base_dir))
+    print(f"Output directory: {output_dir}")
     rs_mapping = process_sample(base_dir)
-    print("Keys in rs_mapping:", rs_mapping.keys())
-    exit(0)
-    cts = rs_mapping["CT"]
-    rs = rs_mapping["RS"]
+    values = rs_mapping.values()
+    cts = []
+    rs = []
+    for v in values:
+        if "CT" not in v:
+            continue
+        cts.append(v["CT"])
+        rs.append(v["RTSTRUCT"])
     print(f"Found {len(rs_mapping)} RS files with CT references.")
-    exit(0)
+    print(f"Found {len(cts)} CT files with RS references.")
 
-    for rs_files, ct_files in rs_mapping.items():
+    for rs_files, ct_files in zip(rs, cts):
         ct_paths = []
         rs_paths = []
         rs_path = None
@@ -378,9 +383,15 @@ def process_each_rs_separately(base_dir, report_path, output_dir="pointclouds_by
                     rs_paths.append(os.path.join(root, file))
                 elif file in ct_files:
                     ct_paths.append(os.path.join(root, file))
+        print(f"Found {len(rs_paths)} RS files and {len(ct_paths)} CT files.")
 
         if rs_paths and ct_paths:
-            rs_files_combined = str.join(rs_files)
+            print(
+                f"Processing RS: {len(rs_paths)} files and {len(ct_paths)} CT files.")
+            rs_files_combined = "__".join(
+                [os.path.basename(path) for path in rs_paths])
+            rs_files_combined = rs_files_combined.replace(
+                ".dcm", "").replace(" ", "_")
             rs_output_dir = os.path.join(
                 output_dir, rs_files_combined.replace(".dcm", "").replace(" ", "_"))
             os.makedirs(rs_output_dir, exist_ok=True)
@@ -405,13 +416,20 @@ def process_each_rs_separately(base_dir, report_path, output_dir="pointclouds_by
             for ds in ct_datasets:
                 sop_uid = ds.SOPInstanceUID
                 contours = contour_map.get(sop_uid, [])
-                plot_ct_with_contours(ds, contours, img_dir, txt_dir)
+                plot_ct_with_contours(
+                    ds, contours, img_dir, txt_dir)
 
-            point_cloud = generate_volume_point_cloud(ct_datasets)
-            visualize_point_cloud(point_cloud)
+            point_cloud = generate_volume_point_cloud(ct_datasets, mask=False)
+            visualize_point_cloud(point_cloud, num_points=10000)
 
-            out_path = os.path.join(rs_output_dir, f"{rs_files_combined}.npy")
+            out_path = os.path.join(
+                rs_output_dir, f"{rs_files_combined}_full_volume.npy")
             np.save(out_path, point_cloud)
+            point_cloud = generate_volume_point_cloud(ct_datasets, mask=True)
+            out_path = os.path.join(
+                rs_output_dir, f"{rs_files_combined}_masked_volume.npy")
+            np.save(out_path, point_cloud)
+
             print(f"Saved point cloud: {out_path}")
         else:
             print(f"Missing RS or CT files for RS: {rs_files}")
