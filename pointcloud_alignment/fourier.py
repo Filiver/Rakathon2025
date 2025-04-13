@@ -359,10 +359,10 @@ if __name__ == "__main__":
     HERE = Path(__file__).parent.parent
 
     DEFAULT_REFERENCE = (
-        HERE / "data/radioprotect/Organized_CT_Data_Axial/SAMPLE_001/2023-06-05/ref_1_2_246_352_221_559666980133719263215614360979762074268/CT"
+        HERE / "data/radioprotect/Organized_CT_Data_Axial/SAMPLE_004/2023-05-02/ref_1_2_246_352_221_50382907113527305278273607881698676893/CT"
     )
     DEFAULT_MEASUREMENT = (
-        HERE / "data/radioprotect/Organized_CT_Data_Axial/SAMPLE_001/2023-06-21/meas_1_2_246_352_221_523526543250385987917834924930119139461/CT"
+        HERE / "data/radioprotect/Organized_CT_Data_Axial/SAMPLE_004/2023-05-16/meas_1_2_246_352_221_476791796356223678612116938366209661881/CT"
     )
 
     parser = argparse.ArgumentParser(description="Fourier Transform Registration")
