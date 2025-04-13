@@ -17,7 +17,7 @@ ROI_intrested = [
     re.compile(r"submandibular*"),
     re.compile(r"esophagus*"),
     re.compile(r"glnd_submand*"),
-    re.compile(r"external*"),
+    #re.compile(r"external*"),
 ]
 
 

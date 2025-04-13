@@ -14,11 +14,20 @@ SAMPLE_ROOT = os.path.join(MAIN_SAMPLES_DIRECTORY, CURR_SAMPLE)
 # Set the directory where you want to save the reports
 # REPORTS_OUTPUT_DIRECTORY = "data/radioprotect/Rakathon Data Organized"
 DEFAULT_REFERENCE = (
+    HERE / "data/radioprotect/Organized_CT_Data_Axial/SAMPLE_001/2023-06-05/ref_1_2_246_352_221_559666980133719263215614360979762074268/"
+)
+DEFAULT_MEASUREMENT = (
+    HERE / "data/radioprotect/Organized_CT_Data_Axial/SAMPLE_001/2023-06-21/meas_1_2_246_352_221_523526543250385987917834924930119139461/"
+)
+
+"""
+DEFAULT_REFERENCE = (
     HERE / "data/radioprotect/Organized_CT_Data_Axial/SAMPLE_004/2023-05-02/ref_1_2_246_352_221_50382907113527305278273607881698676893/"
 )
 DEFAULT_MEASUREMENT = (
     HERE / "data/radioprotect/Organized_CT_Data_Axial/SAMPLE_004/2023-06-13/meas_1_2_246_352_221_54278781642968663956664906787711437486/"
 )
+"""
 
 # -------------------
 
@@ -36,7 +45,7 @@ scan_to_process_meas = DEFAULT_MEASUREMENT
 alignment_results = align_measurement_to_reference_scan(
     dicom_filenames_from_dir(scan_to_process_ref / "CT"),
     dicom_filenames_from_dir(scan_to_process_meas / "CT"),
-    save_videos=True,
+    save_videos=False,
 )
 # Compute measurement contours
 # {contour_name: [(x,y,z), ...]}
