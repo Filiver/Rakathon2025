@@ -161,6 +161,7 @@ def process_contours(orig, transf, origin_zyx, spacing_zyx):
     ok = True
     message = ""
     exceeded_in = {}
+    average_excess_per_part = {}
 
     for body_part in orig.keys():
         threshold = None
@@ -189,6 +190,9 @@ def process_contours(orig, transf, origin_zyx, spacing_zyx):
             print(f"Warning: Body part '{body_part}' not found in transformed data. Skipping.")
             continue
 
+        body_part_total_exceeded = 0.0 # Initialize per-part total excess
+        body_part_count_exceeded = 0   # Initialize per-part count
+
         for slice_num in orig[body_part].keys():
             # Ensure the slice also exists in the transformed data for this body part
             if slice_num not in transf[body_part]:
@@ -197,12 +201,18 @@ def process_contours(orig, transf, origin_zyx, spacing_zyx):
 
             slice1 = orig[body_part][slice_num].numpy()  # Assuming tensors, convert to numpy arrays
             slice2 = transf[body_part][slice_num].numpy()
+
             
             # Compare the slices and get the problematic points
             exceeded, problems = compare_contour_slices_2d(slice1, slice2, origin_zyx, spacing_zyx, slice_num, threshold)
             if exceeded:
                 ok = False
                 exceeded_in.setdefault(body_part, []).append(slice_num)
+                for _, _, dist in problems:
+                    body_part_total_exceeded += (dist - threshold) # Accumulate per-part excess
+                    body_part_count_exceeded += 1    
+                
+
 
             
             # Ensure the slice number exists as a key in the results dictionary
@@ -211,12 +221,19 @@ def process_contours(orig, transf, origin_zyx, spacing_zyx):
             
             # Store the problems under the current slice number and body part
             results[slice_num][body_part] = problems
+
+        if body_part_count_exceeded > 0:
+            average_excess_per_part[body_part] = body_part_total_exceeded / body_part_count_exceeded
         
     if ok:
         message = "All contours are within the shift thresholds"
     else:
-        message = "Threshold exceeded in the following body parts and slices: " + ", ".join([f"{bp}: {slices}" for bp, slices in exceeded_in.items()])
-            
+        message_parts = []
+        for bp, slices in exceeded_in.items():
+            avg_excess = average_excess_per_part.get(bp, 0) # Get average, default to 0 if not found (shouldn't happen here)
+            message_parts.append(f"{bp} on average by {avg_excess:.2f} mm in slices: {sorted(list(set(slices)))}") # Use set to remove duplicate slice numbers if any, then sort
+        message = "Threshold exceeded in the following body parts: " + ", ".join(message_parts)
+              
     return results, message, ok
 
 
