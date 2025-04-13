@@ -3,7 +3,7 @@ from pointcloud_alignment.fourier import align_measurement_to_reference_scan, di
 from contours_finder import find_all_contours_in_meas
 from itk import process_rt_ct_pairs
 from pathlib import Path
-from visualize_conturs import visualize_all_contours_from_dict, visualize_two_contour_dicts
+from visualize_conturs import visualize_all_contours_from_dict, visualize_two_contour_dicts,visualize_all_contours_from_dict2
 import numpy as np
 HERE = Path(__file__).parent
 # --- Configuration ---
@@ -14,11 +14,20 @@ SAMPLE_ROOT = os.path.join(MAIN_SAMPLES_DIRECTORY, CURR_SAMPLE)
 # Set the directory where you want to save the reports
 # REPORTS_OUTPUT_DIRECTORY = "data/radioprotect/Rakathon Data Organized"
 DEFAULT_REFERENCE = (
+    HERE / "data/radioprotect/Organized_CT_Data_Axial/SAMPLE_001/2023-06-05/ref_1_2_246_352_221_559666980133719263215614360979762074268/"
+)
+DEFAULT_MEASUREMENT = (
+    HERE / "data/radioprotect/Organized_CT_Data_Axial/SAMPLE_001/2023-06-21/meas_1_2_246_352_221_523526543250385987917834924930119139461/"
+)
+
+"""
+DEFAULT_REFERENCE = (
     HERE / "data/radioprotect/Organized_CT_Data_Axial/SAMPLE_004/2023-05-02/ref_1_2_246_352_221_50382907113527305278273607881698676893/"
 )
 DEFAULT_MEASUREMENT = (
     HERE / "data/radioprotect/Organized_CT_Data_Axial/SAMPLE_004/2023-06-13/meas_1_2_246_352_221_54278781642968663956664906787711437486/"
 )
+"""
 
 # -------------------
 
@@ -47,18 +56,30 @@ print(contours_dict_ref.keys())
 a = contours_dict_ref[list(contours_dict_ref.keys())[0]]
 print(a)
 print(a.shape)
-contours_meas_torch_dict = find_all_contours_in_meas(
+contours_meas_torch_dict= find_all_contours_in_meas(
     alignment_results["reference"],
     alignment_results["measurement"],
+    alignment_results["spacing"],
+    alignment_results["origin"],
     contours_dict_ref
 )
 print("Origin:", alignment_results["origin"])
 print("Spacing:", alignment_results["spacing"])
-visualize_all_contours_from_dict(contours_meas_torch_dict, np.array(
+visualize_all_contours_from_dict(contours_meas_torch_dict["transformed_metric"],np.array(
     alignment_results["spacing"]),
     np.array(alignment_results["origin"]))
 visualize_two_contour_dicts(
-    contours_dict_ref, contours_meas_torch_dict,
+    contours_dict_ref, contours_meas_torch_dict["transformed_metric"],
     np.array(alignment_results["spacing"]),
     np.array(alignment_results["origin"])
 )
+visualize_all_contours_from_dict2(
+    contours_meas_torch_dict,alignment_results["measurement"],
+    np.array(alignment_results["spacing"]),
+    np.array(alignment_results["origin"]))
+
+import pickle
+with open("rand2.pkl", "wb") as f:
+    pickle.dump(contours_meas_torch_dict, f)
+
+

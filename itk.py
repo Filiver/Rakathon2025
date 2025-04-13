@@ -17,7 +17,7 @@ ROI_intrested = [
     re.compile(r"submandibular*"),
     re.compile(r"esophagus*"),
     re.compile(r"glnd_submand*"),
-    re.compile(r"external*"),
+    #re.compile(r"external*"),
 ]
 
 
@@ -327,37 +327,37 @@ def load_ordered_ct_series_from_directory(dicom_dir):
     return ordered_datasets
 
 
-def plot_ct_with_contours(ds, contours, img_dir, txt_dir):
-    img = ds.pixel_array.astype(np.int16)
-    img = np.clip((img + 1000) / 2000 * 255, 0, 255).astype(np.uint8)
-    spacing = list(ds.PixelSpacing) + [ds.SliceThickness]
-    origin = np.array(ds.ImagePositionPatient)
+    def plot_ct_with_contours(ds, contours, img_dir, txt_dir):
+        img = ds.pixel_array.astype(np.int16)
+        img = np.clip((img + 1000) / 2000 * 255, 0, 255).astype(np.uint8)
+        spacing = list(ds.PixelSpacing) + [ds.SliceThickness]
+        origin = np.array(ds.ImagePositionPatient)
 
-    fig, ax = plt.subplots(figsize=(6, 6))
-    ax.imshow(img, cmap="gray")
-    txt_lines = []
+        fig, ax = plt.subplots(figsize=(6, 6))
+        ax.imshow(img, cmap="gray")
+        txt_lines = []
 
-    for roi_name, coords in contours:
-        # Plotting
-        ij = ((coords[:, :2] - origin[:2]) / spacing[:2]).astype(int)
-        ax.plot(ij[:, 0], ij[:, 1], label=roi_name, linewidth=1)
+        for roi_name, coords in contours:
+            # Plotting
+            ij = ((coords[:, :2] - origin[:2]) / spacing[:2]).astype(int)
+            ax.plot(ij[:, 0], ij[:, 1], label=roi_name, linewidth=1)
 
-        # Saving coordinates as real-world 3D coordinates (x,y,z)
-        points_str = " ".join(f"{x:.2f},{y:.2f},{z:.2f}" for x, y, z in coords)
-        txt_lines.append(f"{roi_name}: {points_str}")
+            # Saving coordinates as real-world 3D coordinates (x,y,z)
+            points_str = " ".join(f"{x:.2f},{y:.2f},{z:.2f}" for x, y, z in coords)
+            txt_lines.append(f"{roi_name}: {points_str}")
 
-    if contours:
-        ax.legend(fontsize="x-small", loc="lower right")
+        if contours:
+            ax.legend(fontsize="x-small", loc="lower right")
 
-    ax.axis("off")
-    plt.title(f"SOP UID: {ds.SOPInstanceUID}")
-    png_path = os.path.join(img_dir, f"{ds.SOPInstanceUID}.png")
-    txt_path = os.path.join(txt_dir, f"{ds.SOPInstanceUID}.txt")
-    plt.savefig(png_path, bbox_inches="tight", pad_inches=0)
-    plt.close()
+        ax.axis("off")
+        plt.title(f"SOP UID: {ds.SOPInstanceUID}")
+        png_path = os.path.join(img_dir, f"{ds.SOPInstanceUID}.png")
+        txt_path = os.path.join(txt_dir, f"{ds.SOPInstanceUID}.txt")
+        plt.savefig(png_path, bbox_inches="tight", pad_inches=0)
+        plt.close()
 
-    with open(txt_path, "w") as f:
-        f.write("\n".join(txt_lines))
+        with open(txt_path, "w") as f:
+            f.write("\n".join(txt_lines))
 
 
 def process_each_rs_separately(base_dir, report_path, output_dir="pointclouds_by_rs", point_cloud=False):
