@@ -17,7 +17,7 @@ A crude visualizer written in pure JS is available.
 
 If you want to try it out, you can do:
 
-`uv install . && python app.py --sample SAMPLE_001`
+`uv pip install . && python app.py --sample SAMPLE_001`
 
 Assuming you have the dataset. The dataset can be preprocessed using the script
 
