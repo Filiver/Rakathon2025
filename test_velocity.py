@@ -4,7 +4,7 @@ from mpl_toolkits.mplot3d import Axes3D
 import numpy as np
 # Import the function from your contours_finder file
 # Make sure contours_finder.py is updated to handle W, H, D scans!
-from contours_finder import find_contours_in_meas, load_contours_from_txt
+from contours_finder import find_contours_in_meas_my, load_contours_from_txt
 
 
 def create_hollow_sphere_xyz(shape_whd, center_xyz, radius, thickness=1, bg_noise_level=0.1, device='cpu'):
@@ -157,7 +157,7 @@ def main():
     # --- Run Alignment ---
     # find_contours_in_meas needs to be adapted to handle (W, H, D) scans
     print("Running alignment optimization...")
-    transformed_contours_xyz = find_contours_in_meas(
+    transformed_contours_xyz = find_contours_in_meas_my(
         scan_ref,      # Reference scan (W, H, D)
         scan_meas,     # Measurement scan (W, H, D)
         contours_xyz   # Contour points from ref scan (N, 3) -> (x, y, z)

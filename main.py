@@ -36,7 +36,7 @@ scan_to_process_meas = DEFAULT_MEASUREMENT
 alignment_results = align_measurement_to_reference_scan(
     dicom_filenames_from_dir(scan_to_process_ref / "CT"),
     dicom_filenames_from_dir(scan_to_process_meas / "CT"),
-    save_videos=False,
+    save_videos=True,
 )
 # Compute measurement contours
 # {contour_name: [(x,y,z), ...]}
@@ -50,6 +50,8 @@ print(a.shape)
 contours_meas_torch_dict = find_all_contours_in_meas(
     alignment_results["reference"],
     alignment_results["measurement"],
+    alignment_results["spacing"],
+    alignment_results["origin"],
     contours_dict_ref
 )
 print("Origin:", alignment_results["origin"])

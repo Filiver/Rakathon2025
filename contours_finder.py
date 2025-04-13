@@ -47,7 +47,6 @@ def load_contours_from_txt(dir_path):
 
     return raw_roi_points, tensor_roi_points
 
-
 def find_contours_in_meas(scan_ref, scan_meas, contours_xyz):
     # Initialize 3x4 affine transform with batch dim: [1, 3, 4]
     # swap axes to match (x, y, z) -> (z, y, x)
@@ -63,7 +62,7 @@ def find_contours_in_meas(scan_ref, scan_meas, contours_xyz):
                        dtype=torch.float32, requires_grad=True)
     theta = torch.nn.Parameter(theta)
 
-    optimizer = optim.AdamW([theta], lr=0.001)
+    optimizer = optim.AdamW([theta], lr=0.01)
     criterion = torch.nn.MSELoss()
 
     # Make sure input is 5D: [B, C, D, H, W]
@@ -80,9 +79,9 @@ def find_contours_in_meas(scan_ref, scan_meas, contours_xyz):
     D, H, W = scan_meas.shape[2:]
 
     # Size for normalization: [W-1, H-1, D-1] to map 0..shape-1 to -1..1
-    # Construct directly to avoid potential slicing issues!
-    norm_factors = torch.tensor(
-        [W - 1, H - 1, D - 1], device=theta.device, dtype=torch.float32)
+    # Construct directly to avoid potential slicing issues
+    # norm_factors = torch.tensor(
+    #     [W - 1, H - 1, D - 1], device=theta.device, dtype=torch.float32)
 
     # Original contours must be float for transformations and grid_sample
     print(f"contours_xyz shape: {contours_xyz.shape}")
@@ -91,7 +90,6 @@ def find_contours_in_meas(scan_ref, scan_meas, contours_xyz):
     contours_xyz_float = torch.tensor(contours_xyz).float()
     # contours_xyz_float = contours_xyz.float()
     # --- End Changes ---
-    previous_loss = float('inf')
 
     for i in range(100):  # Or increased iterations
         optimizer.zero_grad()
@@ -103,22 +101,24 @@ def find_contours_in_meas(scan_ref, scan_meas, contours_xyz):
         transformed_contours_float = transformed_contours_float.squeeze(0)
         transformed_contours_float = transformed_contours_float + \
             theta[:, :, 3].squeeze(0)
+        
+
 
         # --- Differentiable Sampling using grid_sample ---
         # Normalize coordinates to [-1, 1] range
-        norm_transformed = (transformed_contours_float /
-                            norm_factors) * 2.0 - 1.0
-        norm_original = (contours_xyz_float / norm_factors) * \
-            2.0 - 1.0  # Use contours_xyz_float
+        # norm_transformed = (transformed_contours_float /
+        #                     norm_factors) * 2.0 - 1.0
+        # norm_original = (contours_xyz_float / norm_factors) * \
+        #     2.0 - 1.0  # Use contours_xyz_float
 
         # Reshape coordinates for grid_sample: [N, 3] -> [1, N, 1, 1, 3] (for 3D)
         # grid_sample expects grid in order (z, y, x) for input tensor (D, H, W)
         # So we reverse the last dimension: [..., (x, y, z)] -> [..., (z, y, x)]
         # [1, N, 1, 1, 3]
-        grid_transformed = norm_transformed.flip(
+        grid_transformed = transformed_contours_float.flip(
             -1).unsqueeze(0).unsqueeze(2).unsqueeze(3)
-        # [1, N, 1, 1, 3]
-        grid_original = norm_original.flip(
+        # # [1, N, 1, 1, 3]
+        grid_original = contours_xyz_float.flip(
             -1).unsqueeze(0).unsqueeze(2).unsqueeze(3)
 
         # Sample using grid_sample (bilinear interpolation is default)
@@ -154,36 +154,154 @@ def find_contours_in_meas(scan_ref, scan_meas, contours_xyz):
         if i % 10 == 0:
             print(f"Step {i}: loss = {loss.item():.6f}")
 
-        if abs(previous_loss - loss.item()) < 1e-5:
-            print(f"Converged at step {i}")
-            break
-        else:
-            previous_loss = loss.item()
-            # Calculate final transformed contours outside the loop
+    # Calculate final transformed contours outside the loop
     with torch.no_grad():  # No need for gradients here
         transformed_contours = torch.bmm(
             contours_xyz_float.unsqueeze(0), theta[:, :, :3].transpose(1, 2))
         transformed_contours = transformed_contours.squeeze(0)
         transformed_contours = transformed_contours + theta[:, :, 3].squeeze(0)
 
-    print(transformed_contours)
     return transformed_contours  # Return float coordinates
 
 
-def find_contours_in_meas_my(scan_ref, scan_meas, contours_xyz):
-    translation = torch.rand(3, device=scan_ref.device,
-                             dtype=torch.float32, requires_grad=True)
-    rotation = torch.rand(3, device=scan_ref.device,
-                          dtype=torch.float32, requires_grad=True)
-    scale = torch.rand(3, device=scan_ref.device,
-                       dtype=torch.float32, requires_grad=True)
+
+def find_contours_in_meas_my(scan_ref, scan_meas, spacing, origin, contours_xyz_input):
+    device = scan_ref.device
+    dtype = torch.float32
+
+    # --- Input Handling ---
+    # Ensure scans are 5D: [B, C, D, H, W]
+    scan_ref = scan_ref.unsqueeze(0).unsqueeze(0) if scan_ref.dim() == 3 else scan_ref
+    scan_meas = scan_meas.unsqueeze(0).unsqueeze(0) if scan_meas.dim() == 3 else scan_meas
+    if scan_ref.dim() != 5 or scan_meas.dim() != 5:
+        raise ValueError("Input scans must be 5D (B, C, D, H, W)")
+
+    # Ensure spacing and origin are tensors on the correct device
+    spacing = torch.as_tensor(spacing, dtype=dtype, device=device)
+    origin = torch.as_tensor(origin, dtype=dtype, device=device)
+
+    # Ensure contours are tensor (N, 3) on the correct device
+    contours_xyz_metric = torch.as_tensor(contours_xyz_input, dtype=dtype, device=device)
+    if contours_xyz_metric.dim() != 2 or contours_xyz_metric.shape[1] != 3:
+         raise ValueError(f"Input contours must have shape (N, 3), got {contours_xyz_metric.shape}")
+    num_points = contours_xyz_metric.shape[0]
+
+    # --- Coordinate System Setup ---
+    # Scan shape (D, H, W)
+    D, H, W = scan_ref.shape[2:]
+    scan_shape_dhw = torch.tensor([D, H, W], device=device, dtype=dtype)
+
+    # Convert spacing/origin to (x, y, z) order to match contour coordinates
+    spacing_xyz = spacing.flip(-1) # (z, y, x) -> (x, y, z)
+    origin_xyz = origin.flip(-1) # (z, y, x) -> (x, y, z)
+    scan_shape_whd = torch.tensor([W, H, D], device=device, dtype=dtype) # Use (W, H, D) order
+
+    # --- Normalization (for align_corners=True) ---
+    # Divisor: (shape - 1) * spacing. Clamp to avoid division by zero for dims of size 1.
+    norm_divisor = (scan_shape_whd - 1.0).clamp(min=1e-6) * spacing_xyz
+    # Add batch/channel dims for broadcasting: [1, 1, 1, 1, 3]
+    origin_b = origin_xyz.view(1, 1, 1, 1, 3)
+    norm_divisor_b = norm_divisor.view(1, 1, 1, 1, 3)
+
+    # Reshape metric contours for broadcasting and grid_sample: [1, 1, 1, N, 3]
+    contours_xyz_metric_b = contours_xyz_metric.view(1, 1, 1, num_points, 3)
+
+    # Normalize metric coordinates to [-1, 1] range
+    # Formula: normalized = ((metric - origin) / norm_divisor) * 2.0 - 1.0
+    contours_xyz_normalized = ((contours_xyz_metric_b - origin_b) / norm_divisor_b) * 2.0 - 1.0
+    # Flip last dim -> (z, y, x) order for grid_sample
+    grid_normalized = contours_xyz_normalized.flip(-1) # Shape: [1, 1, 1, N, 3], order (z, y, x)
+
+    # --- Optimization Setup ---
+    # Initialize theta closer to identity
+    theta_init = torch.eye(3, 4, device=device, dtype=dtype).unsqueeze(0)
+    theta = torch.nn.Parameter(theta_init.clone()) # Use clone for safety
+    optimizer = optim.AdamW([theta], lr=0.0001) # Maybe adjust LR
+    criterion = torch.nn.MSELoss()
+
+    # --- Precompute Reference Intensities ---
+    # Use align_corners=True as normalization matches it
+    ref_intensities = F.grid_sample(scan_ref, grid_normalized, mode='bilinear', padding_mode='zeros', align_corners=True)
+    # ref_intensities shape: [1, 1, 1, N, 1] -> squeeze -> [1, 1, N] ? Check shape
+
+    print(f"Initial theta:\n{theta.data}")
+
+    # --- Optimization Loop ---
+    for i in range(1000): # Increased iterations might be needed
+        optimizer.zero_grad()
+
+        # Get current transformation matrix M and translation t
+        M = theta[:, :, :3] # Shape: [1, 3, 3]
+        t = theta[:, :, 3:] # Shape: [1, 3, 1]
+
+        # Apply transformation to *normalized* coordinates (x, y, z)
+        # Input contours_xyz_normalized: [1, 1, 1, N, 3]
+        # Reshape for matmul: [1, N, 3]
+        contours_norm_reshaped = contours_xyz_normalized.squeeze(1).squeeze(1) # [1, N, 3]
+        # Apply rotation/scaling (M)
+        # M [1, 3, 3] @ contours_norm_reshaped.transpose(1, 2) [1, 3, N] -> [1, 3, N]
+        transformed_norm_reshaped = M @ contours_norm_reshaped.transpose(1, 2)
+        # Apply translation (t)
+        # transformed_norm_reshaped [1, 3, N] + t [1, 3, 1] -> [1, 3, N] (broadcast t)
+        transformed_norm_reshaped = transformed_norm_reshaped + t
+        # Transpose back and reshape for grid_sample: [1, 3, N] -> [1, N, 3] -> [1, 1, 1, N, 3]
+        transformed_contours_normalized = transformed_norm_reshaped.transpose(1, 2).view(1, 1, 1, num_points, 3)
+
+        # Create grid for sampling: flip last dim -> (z, y, x) order
+        grid_transformed_normalized = transformed_contours_normalized.flip(-1) # Shape: [1, 1, 1, N, 3]
+
+        # Sample measurement scan at transformed normalized coordinates
+        mes_intensities = F.grid_sample(scan_meas, grid_transformed_normalized, mode='bilinear', padding_mode='zeros', align_corners=True)
+
+        # Calculate loss
+        # Ensure shapes match, e.g., squeeze unnecessary dims if needed
+        loss = criterion(ref_intensities, mes_intensities)
+
+        # Regularization (optional, e.g., prevent excessive scaling/shear)
+        # Example: Penalize deviation of M from identity or orthogonality
+        # reg_loss = torch.mean((M @ M.transpose(1, 2) - torch.eye(3, device=device))**2)
+        # total_loss = loss + 0.01 * reg_loss # Add weighted regularization
+        total_loss = loss
+
+        total_loss.backward()
+        optimizer.step()
+
+        if i % 20 == 0: # Print less often
+            print(f"Step {i}: loss = {loss.item():.6f}")
+            # print(f"Theta:\n{theta.data}") # Optional: print theta updates
+
+    # --- Final Transformation and Un-normalization ---
+    with torch.no_grad():
+        # Get final transformation
+        M = theta[:, :, :3]
+        t = theta[:, :, 3:]
+
+        # Apply final transformation to original *normalized* coordinates
+        contours_norm_reshaped = contours_xyz_normalized.squeeze(1).squeeze(1)
+        transformed_norm_reshaped = (M @ contours_norm_reshaped.transpose(1, 2)) + t
+        final_transformed_normalized = transformed_norm_reshaped.transpose(1, 2) # Shape: [1, N, 3]
+
+        # Un-normalize: Convert back from [-1, 1] to metric coordinates
+        # Inverse formula: metric = ((normalized + 1.0) / 2.0) * norm_divisor + origin
+        # Reshape norm_divisor and origin for broadcasting with [1, N, 3]
+        norm_divisor_rs = norm_divisor.view(1, 1, 3)
+        origin_rs = origin_xyz.view(1, 1, 3)
+        # Apply inverse normalization
+        final_transformed_metric = ((final_transformed_normalized + 1.0) / 2.0) * norm_divisor_rs + origin_rs
+
+        # Squeeze batch dimension -> [N, 3]
+        final_transformed_metric = final_transformed_metric.squeeze(0)
+
+    print(f"Final loss: {loss.item():.6f}")
+    print(f"Final theta:\n{theta.data}")
+    return final_transformed_metric # Return metric coordinates
 
 
-def find_all_contours_in_meas(scan_ref, scan_meas, contours_dict):
+def find_all_contours_in_meas(scan_ref, scan_meas, spacing, origin, contours_dict):
     transformed_contours_dict = {}
     for roi_name, contours_xyz in contours_dict.items():
-        transformed_contours = find_contours_in_meas(
-            scan_ref, scan_meas, contours_xyz)
+        transformed_contours = find_contours_in_meas_my(
+            scan_ref, scan_meas, spacing, origin, contours_xyz)
         transformed_contours_dict[roi_name] = transformed_contours
     return transformed_contours_dict
 
