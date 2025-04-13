@@ -103,6 +103,110 @@ def compare_contour_slices(points1, points2, threshold=2.0):
     exceeded = len(problem_points) > 0
     return exceeded, problem_points
 
+def compare_contour_slices_2d(points1, points2, threshold=2.0):
+    """
+    Compare two sets of 2D points in the same slice and check if local shift exceeds threshold.
+
+    Args:
+        points1: (N, 2) array-like, reference contour.
+        points2: (M, 2) array-like, measured contour.
+        threshold: float, distance in mm to flag as significant shift.
+
+    Returns:
+        exceeded: bool, True if any shift > threshold.
+        problem_points: list of tuples [(p1, nearest_p2, dist), ...] where dist > threshold.
+    """
+    # Convert to NumPy arrays
+    p1 = np.asarray(points1)
+    p2 = np.asarray(points2)
+
+    # Create a KD-tree for the second set of points (measured contour)
+    tree = cKDTree(p2)
+
+    # Find the closest points in p2 for each point in p1
+    distances, indices = tree.query(p1)
+
+    problem_points = []
+    for i, dist in enumerate(distances):
+        if dist > threshold:
+            # Add to problem points if the distance exceeds threshold
+            problem_points.append((points1[i], points2[indices[i]], dist))
+
+    exceeded = len(problem_points) > 0
+    return exceeded, problem_points
+
+def process_contours(orig, transf, threshold=2.0):
+    """
+    Process both original and transformed contour data for each body part and slice.
+    
+    Args:
+        orig (dict): Original contour data with body parts as keys and slice data as nested dicts.
+        transf (dict): Transformed contour data with body parts as keys and slice data as nested dicts.
+        threshold (float): The threshold for considering a point as problematic.
+    
+    Returns:
+        dict: A dictionary with the structure:
+            {body_part: {slice_number: list_of_problematic_points}}
+    """
+    results = {}
+    
+    for body_part in orig.keys():
+        part_results = {}
+        
+        for slice_num in orig[body_part].keys():
+            slice1 = orig[body_part][slice_num].numpy()  # Assuming tensors, convert to numpy arrays
+            slice2 = transf[body_part][slice_num].numpy()
+            
+            # Compare the slices and get the problematic points
+            exceeded, problems = compare_contour_slices_2d(slice1, slice2, threshold)
+            
+            # Store the problems for this body part and slice
+            part_results[slice_num] = problems
+        
+        # Store the results for this body part
+        results[body_part] = part_results
+    
+    return results
+
+
+def process_contours(orig, transf, threshold=2.0):
+    """
+    Process both original and transformed contour data for each body part and slice.
+    
+    Args:
+        orig (dict): Original contour data with body parts as keys and slice data as nested dicts.
+        transf (dict): Transformed contour data with body parts as keys and slice data as nested dicts.
+        threshold (float): The threshold for considering a point as problematic.
+    
+    Returns:
+        dict: A dictionary with the structure:
+            {body_part: {slice_number: list_of_problematic_points}}
+    """
+    results = {}
+    
+    for body_part in orig.keys():
+        part_results = {}
+        
+        for slice_num in orig[body_part].keys():
+            # Check if the slice exists in the transformed contours as well
+            if slice_num in transf[body_part]:
+                slice1 = orig[body_part][slice_num].numpy()  # Assuming tensors, convert to numpy arrays
+                slice2 = transf[body_part][slice_num].numpy()
+                
+                # Compare the slices and get the problematic points
+                exceeded, problems = compare_contour_slices_2d(slice1, slice2, threshold)
+                
+                # Store the problems for this body part and slice
+                part_results[slice_num] = problems
+            else:
+                # If slice is missing in transf, you can decide how to handle this case (e.g., skip, or log an error)
+                print(f"Warning: Slice {slice_num} missing in transformed data for body part {body_part}")
+        
+        # Store the results for this body part
+        results[body_part] = part_results
+    
+    return results
+
 def visualize_comparison(points1, points2, problem_points, filepath="comparison_visual.png"):
     """
     Visualize matched points and highlight problem areas.
@@ -131,7 +235,19 @@ def visualize_comparison(points1, points2, problem_points, filepath="comparison_
     plt.savefig(filepath)
     plt.close()
 
+def compare_all_contours(contours_orig, contours_transf):
+    ...
+
 if __name__ == "__main__":
+    pts = load_points_from_pkl("rand3.pkl")
+    # print(pts.keys())
+    orig = pts['binned_z_original']
+    transf = pts['binned_z_transform']
+
+    result = process_contours(orig, transf, threshold=0.5)
+    print(result)
+
+    # print(transf.keys())
     # Load the points from the pickle files
     # dict1 = load_points_from_pkl("rand1.pkl")
     # dict2 = load_points_from_pkl("rand2.pkl")
@@ -146,19 +262,19 @@ if __name__ == "__main__":
     # print(slices1.keys())
     # dict_keys([np.float64(-204.0), np.float64(-201.0), np.float64(-198.0), np.float64(-195.0), np.float64(-192.0), np.float64(-189.0), np.float64(-186.0), np.float64(-183.0), np.float64(-180.0), np.float64(-177.0), np.float64(-174.0), np.float64(-171.0)])
 
-    z = -189.0
+    # z = -189.0
 
     # plot_contour_slices(slices1[z], slices2[z], filepath="./images/contour_slice_comparison.png", label1="Ref", label2="Meas")
 
     # exceeded, problems = compare_contour_slices(slices1[z], slices2[z], threshold=2.0)
     # visualize_comparison(slices1[z], slices2[z], problems, filepath="./images/comparison_visual.png")
 
-    points1 = generate_ellipse_points(a=20, b=20, num_points=200, center=(0, 0), noise=0.3, z=0)
-    points2 = generate_ellipse_points(a=20, b=16, num_points=200, center=(0, 0), noise=0.3, z=0)
+    # points1 = generate_ellipse_points(a=20, b=20, num_points=200, center=(0, 0), noise=0.3, z=0)
+    # points2 = generate_ellipse_points(a=20, b=16, num_points=200, center=(0, 0), noise=0.3, z=0)
 
-    plot_contour_slices(points1, points2, filepath="./images/contour_slice_comparison_2.png", label1="Ref", label2="Meas")
-    exceeded, problems = compare_contour_slices(points1, points2, threshold=3.0)
-    visualize_comparison(points1, points2, problems, filepath="./images/comparison_visual_2.png")
+    # plot_contour_slices(points1, points2, filepath="./images/contour_slice_comparison_2.png", label1="Ref", label2="Meas")
+    # exceeded, problems = compare_contour_slices(points1, points2, threshold=3.0)
+    # visualize_comparison(points1, points2, problems, filepath="./images/comparison_visual_2.png")
 
 
 
