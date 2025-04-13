@@ -2,6 +2,7 @@ import numpy as np
 import pickle
 import matplotlib.pyplot as plt
 import torch
+from scipy.spatial import cKDTree
 
 def load_points_from_pkl(filepath):
     with open(filepath, "rb") as f:
@@ -73,6 +74,61 @@ def plot_contour_slices(points1, points2, filepath="contour_comparison.png", lab
     plt.savefig(filepath)
     plt.close()
 
+def compare_contour_slices(points1, points2, threshold=2.0):
+    """
+    Compare two sets of 3D points in the same z-slice and check if local shift exceeds threshold.
+
+    Args:
+        points1: (N, 3) array-like, reference contour.
+        points2: (M, 3) array-like, measured contour.
+        threshold: float, distance in mm to flag as significant shift.
+
+    Returns:
+        exceeded: bool, True if any shift > threshold.
+        problem_points: list of tuples [(p1, nearest_p2, dist), ...] where dist > threshold.
+    """
+    # Convert to NumPy if needed and reduce to x, y
+    p1 = np.asarray(points1)[:, :2]
+    p2 = np.asarray(points2)[:, :2]
+
+    tree = cKDTree(p2)
+    distances, indices = tree.query(p1)
+
+    problem_points = []
+    for i, dist in enumerate(distances):
+        if dist > threshold:
+            problem_points.append((points1[i], points2[indices[i]], dist))
+
+    exceeded = len(problem_points) > 0
+    return exceeded, problem_points
+
+def visualize_comparison(points1, points2, problem_points, filepath="comparison_visual.png"):
+    """
+    Visualize matched points and highlight problem areas.
+
+    Args:
+        points1: array-like, shape (n, 3)
+        points2: array-like, shape (m, 3)
+        problem_points: list of (p1, p2, dist) where p1 and p2 are 3D np.arrays
+        filepath: where to save the plot
+    """
+    fig, ax = plt.subplots(figsize=(8, 8))
+
+    # Plot all points as background (light gray)
+    ax.scatter(points1[:, 0], points1[:, 1], c='gray', s=5, label="Ref", alpha=0.3)
+    ax.scatter(points2[:, 0], points2[:, 1], c='blue', s=5, label="Meas", alpha=0.3)
+
+    # Plot problem points with red line and highlight
+    for p1, p2, dist in problem_points:
+        ax.plot([p1[0], p2[0]], [p1[1], p2[1]], 'r-', linewidth=1.5)
+        ax.scatter(p1[0], p1[1], c='red', s=15)
+        ax.scatter(p2[0], p2[1], c='red', s=15, marker='x')
+
+    ax.set_aspect("equal")
+    ax.set_title("Comparison of Contours with Problem Areas Highlighted")
+    ax.legend()
+    plt.savefig(filepath)
+    plt.close()
 
 if __name__ == "__main__":
     # Load the points from the pickle files
@@ -91,6 +147,9 @@ if __name__ == "__main__":
 
     z = -189.0
 
-    plot_contour_slices(slices1[z], slices2[z], filepath="./images/contour_slice_comparison.png", label1="Ref", label2="Meas")
+    # plot_contour_slices(slices1[z], slices2[z], filepath="./images/contour_slice_comparison.png", label1="Ref", label2="Meas")
+
+    exceeded, problems = compare_contour_slices(slices1[z], slices2[z], threshold=2.0)
+    visualize_comparison(slices1[z], slices2[z], problems, filepath="./images/comparison_visual.png")
 
 
