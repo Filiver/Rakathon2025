@@ -7,16 +7,19 @@ export class PlaybackControls {
     this.container = document.createElement("div");
     Object.assign(this.container.style, {
       position: "absolute",
-      bottom: "20px",
+      bottom: "5px",
       left: "50%",
       transform: "translateX(-50%)",
       display: "flex",
       flexDirection: "column",
       alignItems: "center",
-      gap: "5px",
-      backgroundColor: "rgba(0, 0, 0, 0.5)",
-      padding: "10px 20px",
-      borderRadius: "5px",
+      gap: "3px",
+      backgroundColor: "rgba(167, 184, 249, 0.85)", // Dark blue/navy color
+      padding: "8px 15px",
+      borderRadius: "10px",
+      boxShadow: "0 6px 16px rgba(0, 0, 0, 0.15), 0 2px 4px rgba(0, 0, 0, 0.1)",
+      backdropFilter: "blur(5px)", // Adds a modern frosted glass effect
+      transition: "all 0.2s ease",
     });
 
     this.controlsRow = document.createElement("div");
@@ -153,6 +156,7 @@ export class PlaybackControls {
       "100px"
     );
 
+    // Format select dropdown styling
     this.formatSelect = document.createElement("select");
     ["jpg", "png"].forEach((format) => {
       const option = document.createElement("option");
@@ -164,6 +168,13 @@ export class PlaybackControls {
       width: "80px",
       textAlign: "center",
       height: buttonHeight + "px",
+      backgroundColor: "#1e3a8a", // Dark blue like the buttons
+      color: "white",
+      border: "none",
+      borderRadius: "6px",
+      cursor: "pointer",
+      boxShadow: "0 2px 4px rgba(0, 0, 0, 0.2)",
+      padding: "0 5px",
     });
     this.formatSelect.addEventListener("change", this.formatSelectChange);
 
@@ -181,6 +192,7 @@ export class PlaybackControls {
       "40px"
     );
 
+    // Speed select dropdown styling
     this.speedSelect = document.createElement("select");
     [0.1, 0.25, 0.5, 1, 2, 5].forEach((speed) => {
       const option = document.createElement("option");
@@ -193,6 +205,13 @@ export class PlaybackControls {
       width: "80px",
       textAlign: "center",
       height: buttonHeight + "px",
+      backgroundColor: "#1e3a8a", // Dark blue like the buttons
+      color: "white",
+      border: "none",
+      borderRadius: "6px",
+      cursor: "pointer",
+      boxShadow: "0 2px 4px rgba(0, 0, 0, 0.2)",
+      padding: "0 5px",
     });
     this.speedSelect.addEventListener("change", this.speedSelectChange);
 
@@ -201,30 +220,55 @@ export class PlaybackControls {
       color: "white",
       display: "flex",
       alignItems: "center",
-      height: "30px",
+      justifyContent: "center", // Center the text
+      height: buttonHeight + "px",
       marginLeft: "5px",
       fontFamily: "monospace",
+      width: "100px", // Fixed width
+      backgroundColor: "#1e3a8a", // Dark blue like buttons
+      borderRadius: "6px",
+      padding: "0 5px",
+      boxShadow: "0 2px 4px rgba(0, 0, 0, 0.2)",
+      textAlign: "center",
+      whiteSpace: "nowrap", // Prevent wrapping
     });
 
     this.progressBarContainer = document.createElement("div");
     Object.assign(this.progressBarContainer.style, {
+      position: "relative",
       width: "100%",
       marginLeft: "15px",
       marginRight: "15px",
       display: "flex",
-      height: "8px",
-      backgroundColor: "#222",
-      borderRadius: "4px",
+      height: "10px",
+      backgroundColor: "rgba(209, 213, 219, 0.3)", // Light gray with transparency
+      borderRadius: "6px",
       cursor: "pointer",
       marginTop: "5px",
+      overflow: "hidden",
+      boxShadow: "inset 0 1px 3px rgba(0, 0, 0, 0.2)",
+      transition: "background-color 0.2s ease",
+    });
+
+    this.progressBarContainer.addEventListener("mouseenter", () => {
+      this.progressBarContainer.style.backgroundColor =
+        "rgba(209, 213, 219, 0.4)";
+    });
+
+    this.progressBarContainer.addEventListener("mouseleave", () => {
+      this.progressBarContainer.style.backgroundColor =
+        "rgba(209, 213, 219, 0.3)";
     });
 
     this.progressBar = document.createElement("div");
     Object.assign(this.progressBar.style, {
       width: "0%",
       height: "100%",
-      backgroundColor: "#cc0000", // Changed from #888 (gray) to red
-      borderRadius: "4px",
+      backgroundColor: "#1e40af", // Dark blue color
+      borderRadius: "6px",
+      transition: "width 0.1s ease-out",
+      backgroundImage: "linear-gradient(to right, #1e40af, #3b82f6)", // Blue gradient
+      boxShadow: "0 0 4px rgba(59, 130, 246, 0.5)", // Blue glow
     });
     this.progressBarContainer.appendChild(this.progressBar);
     // Replace single click listener with mousedown
@@ -237,6 +281,44 @@ export class PlaybackControls {
       "mouseleave",
       this.progressBarMouseUp
     );
+
+    // Add frame markers to the progress bar
+    this.renderFrameMarkers = () => {
+      const totalFrames = this.animationController.totalFrames;
+      if (!this.frameMarkers && totalFrames > 0) {
+        this.frameMarkers = document.createElement("div");
+        this.frameMarkers.className = "frame-markers";
+        Object.assign(this.frameMarkers.style, {
+          position: "absolute",
+          top: "0",
+          left: "0",
+          width: "100%",
+          height: "100%",
+          pointerEvents: "none",
+          display: "flex",
+          alignItems: "center",
+        });
+
+        // Only add markers if we have a reasonable number (avoid visual clutter)
+        if (totalFrames <= 100) {
+          for (let i = 0; i < totalFrames; i++) {
+            const marker = document.createElement("div");
+            const position = (i / (totalFrames - 1)) * 100;
+            Object.assign(marker.style, {
+              position: "absolute",
+              left: `${position}%`,
+              height: i % 5 === 0 ? "70%" : "40%", // Taller markers every 5 frames
+              width: "1px",
+              backgroundColor: "rgba(255, 255, 255, 0.4)",
+              transform: "translateX(-50%)",
+            });
+            this.frameMarkers.appendChild(marker);
+          }
+        }
+
+        this.progressBarContainer.appendChild(this.frameMarkers);
+      }
+    };
 
     // Assemble controls row
     [
@@ -260,11 +342,20 @@ export class PlaybackControls {
   }
 
   updateElements() {
-    const currentTime = this.animationController.getCurrentTime().toFixed(3);
-    const totalTime = this.animationController.getTotalTime().toFixed(3);
-    this.frameCounter.textContent = `time: ${currentTime} / ${totalTime}`;
+    const currentFrame = this.animationController.currentFrame + 1; // Add 1 for human-readable indexing (1-based)
+    const totalFrames = this.animationController.totalFrames;
+    // Format with fixed width using padStart for consistent display
+    this.frameCounter.textContent = `${currentFrame}/${totalFrames}`;
+
+    // We still need time values for progress calculation
+    const currentTime = this.animationController.getCurrentTime();
+    const totalTime = this.animationController.getTotalTime();
     const progress = currentTime / totalTime;
     this.progressBar.style.width = `${(progress * 100).toFixed(1)}%`;
+
+    // Ensure frame markers are rendered
+    this.renderFrameMarkers();
+
     this.lastRenderTime = Number.NEGATIVE_INFINITY;
   }
 
@@ -321,14 +412,15 @@ export class PlaybackControls {
     document.removeEventListener("keydown", this.keydownListener);
   }
 
+  // Update button style to match the dark blue theme
   #createButton(text, onClick, width = "auto") {
     const button = document.createElement("button");
     Object.assign(button.style, {
-      padding: "5px 5px",
-      backgroundColor: "#444",
+      padding: "5px 10px",
+      backgroundColor: "#1e3a8a", // Dark blue background
       color: "white",
       border: "none",
-      borderRadius: "4px",
+      borderRadius: "6px",
       cursor: "pointer",
       width: width,
       minWidth: "40px",
@@ -336,7 +428,20 @@ export class PlaybackControls {
       display: "inline-flex",
       justifyContent: "center",
       alignItems: "center",
+      boxShadow: "0 2px 4px rgba(0, 0, 0, 0.2)",
+      transition: "all 0.2s ease",
     });
+
+    button.addEventListener("mouseenter", () => {
+      button.style.backgroundColor = "#2563eb"; // Lighter blue on hover
+      button.style.boxShadow = "0 3px 6px rgba(0, 0, 0, 0.25)";
+    });
+
+    button.addEventListener("mouseleave", () => {
+      button.style.backgroundColor = "#1e3a8a"; // Back to dark blue
+      button.style.boxShadow = "0 2px 4px rgba(0, 0, 0, 0.2)";
+    });
+
     button.textContent = text;
     button.addEventListener("click", onClick);
     return button;
