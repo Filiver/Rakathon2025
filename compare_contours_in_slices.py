@@ -209,7 +209,7 @@ def process_contours(orig, transf, origin_zyx, spacing_zyx):
                 ok = False
                 exceeded_in.setdefault(body_part, []).append(slice_num)
                 for _, _, dist in problems:
-                    body_part_total_exceeded += (dist - threshold) # Accumulate per-part excess
+                    body_part_total_exceeded += abs(dist) # Accumulate per-part excess
                     body_part_count_exceeded += 1    
                 
 
@@ -226,15 +226,32 @@ def process_contours(orig, transf, origin_zyx, spacing_zyx):
             average_excess_per_part[body_part] = body_part_total_exceeded / body_part_count_exceeded
         
     if ok:
-        message = "All contours are within the shift thresholds"
+        # message = "All contours are within the shift thresholds"
+        status = {
+                    "message": "All deviations are within limits",
+                    "severity": 0,
+                    "content": {},
+                }
     else:
         message_parts = []
+        content_details = {} # Initialize dictionary for status content
         for bp, slices in exceeded_in.items():
-            avg_excess = average_excess_per_part.get(bp, 0) # Get average, default to 0 if not found (shouldn't happen here)
-            message_parts.append(f"{bp} on average by {avg_excess:.2f} mm in slices: {sorted(list(set(slices)))}") # Use set to remove duplicate slice numbers if any, then sort
+            avg_excess = average_excess_per_part.get(bp, 0) # Get average, default to 0 if not found
+            sorted_unique_slices = sorted(list(set(slices))) # Get unique, sorted list of slices
+            # Format message part for the overall message string
+            message_parts.append(f"{bp} on average by {avg_excess:.2f} mm in slices: {sorted_unique_slices}")
+            # Populate the content dictionary for the status object
+            content_details[bp] = f"average deviation: {avg_excess:.2f} mm, in slices: {sorted_unique_slices}"
+
         message = "Threshold exceeded in the following body parts: " + ", ".join(message_parts)
+
+        status = {
+                    "message": "Review by a doctor required, deviations detected",
+                    "severity": 1,
+                    "content": content_details, # Assign the populated dictionary here
+                }
               
-    return results, message, ok
+    return results, status, ok
 
 
 # def process_contours(orig, transf):
