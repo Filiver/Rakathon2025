@@ -3,6 +3,7 @@ import pickle
 import matplotlib.pyplot as plt
 import torch
 from scipy.spatial import cKDTree
+from contour_slice_test_generator import generate_ellipse_points
 
 def load_points_from_pkl(filepath):
     with open(filepath, "rb") as f:
@@ -132,14 +133,14 @@ def visualize_comparison(points1, points2, problem_points, filepath="comparison_
 
 if __name__ == "__main__":
     # Load the points from the pickle files
-    dict1 = load_points_from_pkl("rand1.pkl")
-    dict2 = load_points_from_pkl("rand2.pkl")
+    # dict1 = load_points_from_pkl("rand1.pkl")
+    # dict2 = load_points_from_pkl("rand2.pkl")
 
-    points1 = dict1['parotid_l']
-    points2 = dict2['parotid_l']
-    points2_rounded = round_z_coordinates_tensor(points2, method='floor')
+    # points1 = dict1['parotid_l']
+    # points2 = dict2['parotid_l']
+    # points2_rounded = round_z_coordinates_tensor(points2, method='floor')
 
-    slices1, slices2 = filter_by_z(points1, points2_rounded)
+    # slices1, slices2 = filter_by_z(points1, points2_rounded)
 
     # print(slices2[z])
     # print(slices1.keys())
@@ -149,7 +150,17 @@ if __name__ == "__main__":
 
     # plot_contour_slices(slices1[z], slices2[z], filepath="./images/contour_slice_comparison.png", label1="Ref", label2="Meas")
 
-    exceeded, problems = compare_contour_slices(slices1[z], slices2[z], threshold=2.0)
-    visualize_comparison(slices1[z], slices2[z], problems, filepath="./images/comparison_visual.png")
+    # exceeded, problems = compare_contour_slices(slices1[z], slices2[z], threshold=2.0)
+    # visualize_comparison(slices1[z], slices2[z], problems, filepath="./images/comparison_visual.png")
+
+    points1 = generate_ellipse_points(a=20, b=20, num_points=200, center=(0, 0), noise=0.3, z=0)
+    points2 = generate_ellipse_points(a=20, b=16, num_points=200, center=(0, 0), noise=0.3, z=0)
+
+    plot_contour_slices(points1, points2, filepath="./images/contour_slice_comparison_2.png", label1="Ref", label2="Meas")
+    exceeded, problems = compare_contour_slices(points1, points2, threshold=3.0)
+    visualize_comparison(points1, points2, problems, filepath="./images/comparison_visual_2.png")
+
+
+
 
 

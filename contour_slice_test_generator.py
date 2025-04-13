@@ -1,47 +1,22 @@
 import numpy as np
 
-def generate_clean_ellipse(
-    center=(0, 0),
-    axes=(50, 30),
-    num_points=100,
-    angle=0.0,
-    z_value=0.0
-):
-    """
-    Generate clean points on the perimeter of an ellipse.
+# contour_generator.py
+import numpy as np
 
-    Args:
-        center: (x, y) center of the ellipse.
-        axes: (a, b) lengths of the ellipse's semi-axes.
-        num_points: Number of points to generate.
-        angle: Rotation of the ellipse in radians.
-        z_value: Constant z-value for the slice.
-
-    Returns:
-        ndarray of shape (num_points, 3) with x, y, z.
-    """
+def generate_ellipse_points(a, b, num_points=100, center=(0, 0), noise=0.0, z=0):
     t = np.linspace(0, 2 * np.pi, num_points, endpoint=False)
-    a, b = axes
-    x = a * np.cos(t)
-    y = b * np.sin(t)
+    x = a * np.cos(t) + center[0]
+    y = b * np.sin(t) + center[1]
+    x += np.random.normal(0, noise, size=num_points)
+    y += np.random.normal(0, noise, size=num_points)
+    z = np.full_like(x, z)
+    return np.stack((x, y, z), axis=1)
 
-    # Rotate
-    cos_ang = np.cos(angle)
-    sin_ang = np.sin(angle)
-    x_rot = cos_ang * x - sin_ang * y
-    y_rot = sin_ang * x + cos_ang * y
-
-    # Translate and add z
-    x_final = x_rot + center[0]
-    y_final = y_rot + center[1]
-    z_final = np.full_like(x_final, z_value)
-
-    return np.stack((x_final, y_final, z_final), axis=1)
 
 if __name__ == "__main__":
     # Simulate one more circular, one more elliptical
-    reference = generate_clean_ellipse(center=(50, 50), axes=(30, 30), num_points=100, z_value=10)
-    measured  = generate_clean_ellipse(center=(50, 50), axes=(30, 20), num_points=100, z_value=10)
+    reference = generate_ellipse_points(center=(50, 50), axes=(30, 30), num_points=100, z_value=10)
+    measured  = generate_ellipse_points(center=(50, 50), axes=(30, 20), num_points=100, z_value=10)
 
     import matplotlib.pyplot as plt
     plt.figure(figsize=(6, 6))
