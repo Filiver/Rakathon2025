@@ -83,17 +83,18 @@ visualize_all_contours_from_dict2(
 """
 print(contours_meas_torch_dict.keys())
 print(contours_meas_torch_dict["binned_z_transform"].keys())
-intersections = detect_intersect(contours_meas_torch_dict)
+intersections, volumes = detect_intersect(contours_meas_torch_dict)
 print("Intersections found:")
 print(intersections)
-cover = compare_contour_sets(
+print("Volumes found:")
+print(volumes)
+input("Press Enter to continue...")
+cover, cover_volumes = compare_contour_sets(
     contours_meas_torch_dict["binned_z_transform"], contours_meas_torch_dict["binned_z_original"])
 print("Cover found:")
 print(cover)
-for key in cover.keys():
-    volume_overlap_percent = cover[key][1]
-    print(f"Key: {key}, Cover: {volume_overlap_percent:.2f}%")
-
+print("Cover volumes found:")
+print(cover_volumes)
 
 with open("rand2.pkl", "wb") as f:
     pickle.dump(contours_meas_torch_dict, f)
