@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 import torch
 from scipy.spatial import cKDTree
 from contour_slice_test_generator import generate_ellipse_points
+from constants import *
 
 def load_points_from_pkl(filepath):
     with open(filepath, "rb") as f:
@@ -169,7 +170,7 @@ def process_contours(orig, transf, threshold=2.0):
     return results
 
 
-def process_contours(orig, transf, threshold=2.0):
+def process_contours(orig, transf):
     """
     Process both original and transformed contour data for each body part and slice.
     
@@ -186,6 +187,24 @@ def process_contours(orig, transf, threshold=2.0):
     
     for body_part in orig.keys():
         part_results = {}
+        threshold = None
+        match body_part:
+            case 'parotid_l' | 'parotid_r':
+                threshold = thresh_parotid
+            case 'submandibular_l' | 'submandibular_r' | 'glnd_submand_l' | 'glnd_submand_r':
+                threshold = thresh_submandibular_gland
+            case 'esophagus':
+                threshold = thresh_esophagus
+            case 'spinal_cord' | 'spinalcord_prv' | 'spinalcord':
+                threshold = thresh_spinal_cord
+            case 'ctv_low' | 'ctv_high':
+                threshold = thresh_CTV
+            case 'ptv_low' | 'ptv_mid00':
+                threshold = thresh_PTV
+        
+        if threshold is None:
+            raise ValueError(f"Unknown body part: {body_part}")
+ 
         
         for slice_num in orig[body_part].keys():
             # Check if the slice exists in the transformed contours as well
@@ -244,7 +263,7 @@ if __name__ == "__main__":
     orig = pts['binned_z_original']
     transf = pts['binned_z_transform']
 
-    result = process_contours(orig, transf, threshold=0.5)
+    result = process_contours(orig, transf)
     print(result)
 
     # print(transf.keys())
