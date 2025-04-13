@@ -1,10 +1,12 @@
+import pickle
 import os
 from pointcloud_alignment.fourier import align_measurement_to_reference_scan, dicom_filenames_from_dir
 from contours_finder import find_all_contours_in_meas
 from itk import process_rt_ct_pairs
 from pathlib import Path
-from visualize_conturs import visualize_all_contours_from_dict, visualize_two_contour_dicts,visualize_all_contours_from_dict2
+from visualize_conturs import visualize_all_contours_from_dict, visualize_two_contour_dicts, visualize_all_contours_from_dict2
 import numpy as np
+from detect_intersects import detect_intersect, compare_contour_sets
 HERE = Path(__file__).parent
 # --- Configuration ---
 # Set the main directory containing your sample folders
@@ -56,7 +58,7 @@ print(contours_dict_ref.keys())
 a = contours_dict_ref[list(contours_dict_ref.keys())[0]]
 print(a)
 print(a.shape)
-contours_meas_torch_dict= find_all_contours_in_meas(
+contours_meas_torch_dict = find_all_contours_in_meas(
     alignment_results["reference"],
     alignment_results["measurement"],
     alignment_results["spacing"],
@@ -65,6 +67,7 @@ contours_meas_torch_dict= find_all_contours_in_meas(
 )
 print("Origin:", alignment_results["origin"])
 print("Spacing:", alignment_results["spacing"])
+"""
 visualize_all_contours_from_dict(contours_meas_torch_dict["transformed_metric"],np.array(
     alignment_results["spacing"]),
     np.array(alignment_results["origin"]))
@@ -77,9 +80,20 @@ visualize_all_contours_from_dict2(
     contours_meas_torch_dict,alignment_results["measurement"],
     np.array(alignment_results["spacing"]),
     np.array(alignment_results["origin"]))
+"""
+print(contours_meas_torch_dict.keys())
+print(contours_meas_torch_dict["binned_z_transform"].keys())
+intersections = detect_intersect(contours_meas_torch_dict)
+print("Intersections found:")
+print(intersections)
+input()
+cover = compare_contour_sets(
+    contours_meas_torch_dict["binned_z_transform"], contours_meas_torch_dict["binned_z_original"])
+print("Cover found:")
+for key in cover.keys():
+    volume_overlap_percent = cover[key][1]
+    print(f"Key: {key}, Cover: {volume_overlap_percent:.2f}%")
 
-import pickle
+
 with open("rand2.pkl", "wb") as f:
     pickle.dump(contours_meas_torch_dict, f)
-
-
