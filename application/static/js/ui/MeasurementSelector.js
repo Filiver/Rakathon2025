@@ -27,7 +27,14 @@ export class MeasurementSelector {
       flexShrink: 0, // Prevent shrinking
       height: "46px", // Reduced height from 56px
       boxSizing: "border-box",
+      zIndex: "10", // Add high z-index to ensure visibility
+      position: "relative", // Add positioning context
     });
+
+    // State tracking
+    this.isLoading = false;
+    this.isLoaded = false;
+    this.optionsChanged = false;
 
     // --- Reference Selector ---
     const refLabel = document.createElement("label");
@@ -51,26 +58,52 @@ export class MeasurementSelector {
 
     // --- Confirm Button ---
     this.confirmButton = document.createElement("button");
-    this.confirmButton.textContent = "LOAD DATA"; // ALL CAPS button text
+    this.confirmButton.textContent = ""; // ALL CAPS button text
     Object.assign(this.confirmButton.style, {
       padding: "8px 15px",
       marginLeft: "auto", // Push button to the right if desired, or adjust gap
-      backgroundColor: "#5cb85c", // Green color
+      backgroundColor: "#d9534f", // Default to red (needs loading)
       color: "white",
       border: "none",
       borderRadius: "4px",
       cursor: "pointer",
       fontSize: "1em",
       whiteSpace: "nowrap", // Prevent button text wrapping
+      width: "120px", // Slightly wider to accommodate the spinner
+      textAlign: "center", // Center text within the fixed width
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      position: "relative",
     });
-    this.confirmButton.addEventListener(
-      "mouseover",
-      () => (this.confirmButton.style.backgroundColor = "#4cae4c")
-    );
-    this.confirmButton.addEventListener(
-      "mouseout",
-      () => (this.confirmButton.style.backgroundColor = "#5cb85c")
-    );
+
+    // Create spinner element (hidden by default)
+    this.spinner = document.createElement("span");
+    this.spinner.textContent = "↻"; // Unicode rotating arrow
+    Object.assign(this.spinner.style, {
+      marginRight: "5px",
+      display: "none",
+      animation: "spin 1s linear infinite",
+    });
+
+    // Add keyframes for spinner animation
+    const styleSheet = document.createElement("style");
+    styleSheet.textContent = `
+      @keyframes spin {
+        from { transform: rotate(0deg); }
+        to { transform: rotate(360deg); }
+      }
+    `;
+    document.head.appendChild(styleSheet);
+
+    this.confirmButton.appendChild(this.spinner);
+
+    // Create text span for button label
+    this.buttonText = document.createElement("span");
+    this.buttonText.textContent = "LOAD DATA";
+    this.confirmButton.appendChild(this.buttonText);
+
+    // No mouseover/mouseout events here as we'll control colors based on state
     this.container.appendChild(this.confirmButton);
 
     parentElement.appendChild(this.container); // Append to the specific parent
@@ -80,6 +113,17 @@ export class MeasurementSelector {
       "click",
       this.handleConfirmClick.bind(this)
     );
+
+    // Add change event listeners to detect when options change
+    this.referenceSelect.addEventListener("change", () => {
+      this.optionsChanged = true;
+      this.updateConfirmButtonText();
+    });
+
+    this.measurementSelect.addEventListener("change", () => {
+      this.optionsChanged = true;
+      this.updateConfirmButtonText();
+    });
   }
 
   applySelectStyles(selectElement) {
@@ -113,6 +157,7 @@ export class MeasurementSelector {
       console.log(
         `Demo mode: Automatically loading first combination - Ref: ${firstRef}, Meas: ${firstMeas}`
       );
+      this.disableConfirmButton(); // Set button to loading state
       this.requestImages(firstRef, firstMeas);
     } else {
       console.log(
@@ -120,6 +165,11 @@ export class MeasurementSelector {
       );
     }
     // --- End Demo Mode Fix ---
+
+    // Reset state when new options are loaded
+    this.isLoaded = false;
+    this.optionsChanged = false;
+    this.updateConfirmButtonText();
   }
 
   populateSelect(selectElement, dateList, emptyText) {
@@ -188,53 +238,59 @@ export class MeasurementSelector {
   }
 
   /**
-   * Disables the confirm button and shows a loading spinner
+   * Updates the text of the confirm button based on current state
    */
-  disableConfirmButton() {
-    if (this.confirmButton) {
+  updateConfirmButtonText() {
+    if (!this.confirmButton) return;
+
+    if (this.isLoading) {
+      this.buttonText.textContent = "LOADING";
       this.confirmButton.disabled = true;
-
-      // Store original button text
-      if (!this.confirmButton._originalText) {
-        this.confirmButton._originalText = this.confirmButton.innerHTML;
-      }
-
-      // Replace with loading spinner
-      this.confirmButton.innerHTML =
-        '<span class="loading-spinner">⟳</span> Loading...';
-
-      // Make sure spinner styles exist
-      if (!document.getElementById("spinner-animation")) {
-        const style = document.createElement("style");
-        style.id = "spinner-animation";
-        style.textContent = `
-          @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-          }
-          .loading-spinner {
-            display: inline-block;
-            animation: spin 1.5s linear infinite;
-          }
-        `;
-        document.head.appendChild(style);
-      }
+      this.confirmButton.style.backgroundColor = "#5bc0de"; // Blue for loading
+      this.spinner.style.display = "inline-block"; // Show spinner
+    } else if (this.isLoaded && !this.optionsChanged) {
+      this.buttonText.textContent = "LOADED";
+      this.confirmButton.disabled = false;
+      this.confirmButton.style.backgroundColor = "#5cb85c"; // Green for loaded
+      this.spinner.style.display = "none"; // Hide spinner
+    } else {
+      this.buttonText.textContent = "LOAD DATA";
+      this.confirmButton.disabled = false;
+      this.confirmButton.style.backgroundColor = "#d9534f"; // Red for needs loading
+      this.spinner.style.display = "none"; // Hide spinner
     }
   }
 
   /**
-   * Re-enables the confirm button and restores its original text
+   * Mark data as successfully loaded
+   */
+  markAsLoaded() {
+    this.isLoading = false;
+    this.isLoaded = true;
+    this.optionsChanged = false;
+    this.updateConfirmButtonText();
+  }
+
+  /**
+   * Disable the confirm button during loading
+   */
+  disableConfirmButton() {
+    this.isLoading = true;
+    this.updateConfirmButtonText();
+  }
+
+  /**
+   * Enable the confirm button after loading completes
    */
   enableConfirmButton() {
-    if (this.confirmButton) {
-      this.confirmButton.disabled = false;
+    this.isLoading = false;
+    this.updateConfirmButtonText();
+  }
 
-      // Restore original text if available
-      if (this.confirmButton._originalText) {
-        this.confirmButton.innerHTML = this.confirmButton._originalText;
-      } else {
-        this.confirmButton.innerHTML = "LOAD DATA";
-      }
-    }
+  /**
+   * Set a reference to the View for communication
+   */
+  setView(view) {
+    this.view = view;
   }
 }

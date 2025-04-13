@@ -37,6 +37,11 @@ export class View {
   imagesDataHandler(imagesData) {
     console.log("Received images data");
 
+    // Mark the measurement selector as loaded
+    if (this.measurementSelector) {
+      this.measurementSelector.markAsLoaded();
+    }
+
     // Re-enable the measurement selector if it was disabled
     if (this.measurementSelector) {
       this.measurementSelector.enableConfirmButton();
@@ -123,10 +128,36 @@ export class View {
     );
 
     if (refIndex >= 0 && measIndex >= 0) {
+      // Debug: log contour data for this frame
+      if (frameIndex === 0) {
+        // Only log for first frame to avoid spamming
+        console.log(
+          "Reference contours:",
+          Object.keys(this.imageSet.references[refIndex])
+            .filter((key) => key !== "dataUri")
+            .reduce((obj, key) => {
+              obj[key] = this.imageSet.references[refIndex][key];
+              return obj;
+            }, {})
+        );
+        console.log(
+          "Measurement contours:",
+          Object.keys(this.imageSet.measurements[measIndex])
+            .filter((key) => key !== "dataUri")
+            .reduce((obj, key) => {
+              obj[key] = this.imageSet.measurements[measIndex][key];
+              return obj;
+            }, {})
+        );
+      }
+
+      // Update the image panel with new frames
       this.imagePanel.update(
         this.imageSet.references[refIndex],
         this.imageSet.measurements[measIndex]
       );
+
+      // Remove InfoPanel update
 
       // If capturing, capture the newly displayed frame (after images are potentially loaded/rendered)
       // Use a small timeout to allow the browser to render the images before capture
@@ -162,7 +193,7 @@ export class View {
 
     // Listen for available files
     socket.on("available_files", (filesData) => {
-      console.log("Received available files");
+      console.log("Received available files", filesData);
       this.initFromAvailableFiles(filesData);
       // Populate the measurement selector with both reference and measurement dates
       if (
@@ -199,6 +230,36 @@ export class View {
 
   initFromImagesData(imagesData) {
     this.imageSet = imagesData;
+
+    // Debug: Check what contour data we received
+    if (
+      imagesData &&
+      imagesData.references &&
+      imagesData.references.length > 0
+    ) {
+      const sampleRef = imagesData.references[0];
+      const contourKeys = Object.keys(sampleRef).filter((k) => k !== "dataUri");
+      console.log("Reference sample contour keys:", contourKeys);
+
+      // Check if we have any of the expected ROI names
+      const expectedRois = ["gtv", "ctv", "ptv", "spinal_cord", "parotid"];
+      const foundRois = expectedRois.filter((roi) => sampleRef[roi]);
+      console.log("Found expected ROIs:", foundRois);
+
+      // Check if there are any other ROIs that might be real contours
+      const otherRois = contourKeys.filter((k) => !expectedRois.includes(k));
+      console.log("Other potential ROIs:", otherRois);
+
+      // For each found ROI, log point count to help debugging
+      foundRois.forEach((roi) => {
+        const points = sampleRef[roi];
+        console.log(
+          `ROI ${roi}: ${points.length} points, first point:`,
+          points.length > 0 ? points[0] : "N/A"
+        );
+      });
+    }
+
     console.log(
       `Stored ${this.imageSet?.references?.length || 0} reference images and ${
         this.imageSet?.measurements?.length || 0
@@ -208,8 +269,8 @@ export class View {
 
   // Simplified initialization
   init() {
-    // Set body background to white
-    document.body.style.backgroundColor = "#FFFFFF";
+    // Set background to a calming blue-teal gradient
+    document.body.style.background = "rgba(0, 76, 255, 0.85)";
 
     // Create status panel before other UI components
     this.statusPanel = new StatusPanel("image-panel-container"); // Pass parent ID for status panel
@@ -227,11 +288,78 @@ export class View {
       "left-panel-container"
     ); // Pass socket and parent ID
 
+    // Set the view reference in the measurement selector
+    this.measurementSelector.setView(this);
+
     // Start periodic status updates
     this.startStatusUpdates();
 
     // Removed splash screen removal from here
     console.log("View initialized, waiting for available files...");
+  }
+
+  /**
+   * Creates a message to guide the user to select and load data
+   */
+  createInitialLoadingMessage() {
+    const existingSplash = document.getElementById("loading-splash");
+
+    // If there's already a splash screen, update its content
+    if (existingSplash) {
+      existingSplash.innerHTML = ""; // Clear existing content
+
+      const message = document.createElement("div");
+      message.innerHTML = `
+        <h2>Ready to Load Data</h2>
+        <p>Please select reference and measurement dates, then click "Load" to begin.</p>
+        <p>↑ Use the selection panel above ↑</p>
+      `;
+
+      Object.assign(message.style, {
+        color: "white",
+        textAlign: "center",
+        position: "absolute",
+        top: "50%",
+        left: "50%",
+        transform: "translate(-50%, -50%)",
+        fontFamily: "sans-serif",
+        backgroundColor: "rgba(0, 0, 0, 0.7)",
+        padding: "20px",
+        borderRadius: "8px",
+        zIndex: "2", // Lower z-index to avoid blocking UI controls
+      });
+
+      existingSplash.appendChild(message);
+    } else {
+      // Create a new message if no splash exists
+      const messageContainer = document.createElement("div");
+      messageContainer.id = "user-selection-prompt";
+
+      Object.assign(messageContainer.style, {
+        position: "absolute",
+        top: "50%",
+        left: "50%",
+        transform: "translate(-50%, -50%)",
+        backgroundColor: "rgba(0, 0, 0, 0.7)",
+        color: "white",
+        padding: "20px",
+        borderRadius: "8px",
+        textAlign: "center",
+        zIndex: "2", // Lower z-index to avoid blocking UI controls
+        fontFamily: "sans-serif",
+        pointerEvents: "none", // Allow clicks to pass through to elements below
+      });
+
+      messageContainer.innerHTML = `
+        <h2>Welcome to the Visualization Tool</h2>
+        <p>Please select reference and measurement dates, then click "Load" to begin.</p>
+        <p>↑ Use the selection panel above ↑</p>
+      `;
+
+      document
+        .getElementById("image-panel-container")
+        .appendChild(messageContainer);
+    }
   }
 
   /**
@@ -290,6 +418,7 @@ export class View {
     this.contourPanel?.dispose();
     this.measurementSelector?.dispose();
     this.animationController?.dispose();
+    // Remove InfoPanel disposal
 
     // Disconnect socket
     if (this.socket) {

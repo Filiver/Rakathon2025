@@ -41,6 +41,8 @@ export class ContourAdjustmentPanel {
       boxSizing: "border-box",
       justifyContent: "flex-start",
       fontSize: "0.9rem",
+      zIndex: "10", // Add high z-index to ensure visibility
+      position: "relative", // Add positioning context
     });
 
     // Create title element ALL CAPS
@@ -67,6 +69,8 @@ export class ContourAdjustmentPanel {
     // Add projection controls with clearer labels
     this.createProjectionCheckbox("ref_on_meas", "R → M", "#FFFFFF");
     this.createProjectionCheckbox("meas_on_ref", "M → R", "#FFFFFF");
+
+    // REMOVED: Cross-projection settings section that was causing errors
 
     parentElement.appendChild(this.container);
   }

@@ -86,10 +86,10 @@ print(contours_meas_torch_dict["binned_z_transform"].keys())
 intersections = detect_intersect(contours_meas_torch_dict)
 print("Intersections found:")
 print(intersections)
-input()
 cover = compare_contour_sets(
     contours_meas_torch_dict["binned_z_transform"], contours_meas_torch_dict["binned_z_original"])
 print("Cover found:")
+print(cover)
 for key in cover.keys():
     volume_overlap_percent = cover[key][1]
     print(f"Key: {key}, Cover: {volume_overlap_percent:.2f}%")

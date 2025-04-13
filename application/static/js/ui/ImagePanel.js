@@ -22,17 +22,21 @@ export class ImagePanel {
     Object.assign(this.container.style, {
       display: "flex",
       justifyContent: "center", // Center images horizontally
-      alignItems: "center", // Center images vertically
+      alignItems: "flex-start", // Align images to the top instead of center
       flexWrap: "nowrap",
-      width: "90%", // Take full width of parent
+      width: "93%", // Take full width of parent
       height: "100%", // Take full height of parent
       padding: "10px", // Reduced padding from 20px
-      paddingTop: "0",
+      paddingTop: "30px", // Added padding at top
       marginTop: "-20px", // Added negative margin to move images up
+      marginBottom: "10px", // Added margin at bottom
       boxSizing: "border-box",
       overflow: "visible", // Prevent clipping
       gap: "80px", // Increased gap between images
     });
+
+    // Add scale factor for larger images
+    this.scaleFactor = 1.4; // Increase this value to make images larger
 
     // Create canvases for reference and measurement images
     this.refCanvas = this.createCanvas("reference-canvas");
@@ -72,7 +76,7 @@ export class ImagePanel {
   createCanvas(id) {
     const canvasContainer = document.createElement("div");
     canvasContainer.style.position = "relative"; // For absolute positioning of the label
-    canvasContainer.style.width = "45%";
+    canvasContainer.style.width = "45%"; // Original width
     canvasContainer.style.height = "auto";
     canvasContainer.style.display = "flex";
     canvasContainer.style.justifyContent = "center";
@@ -85,6 +89,9 @@ export class ImagePanel {
     canvasWrapper.style.width = "100%";
     canvasWrapper.style.height = "100%";
     canvasWrapper.style.overflow = "hidden"; // Hide overflow when zooming
+    canvasWrapper.style.borderRadius = "12px"; // Move border radius from canvas to wrapper
+    canvasWrapper.style.boxShadow =
+      "0 8px 16px rgba(0, 77, 64, 0.15), 0 2px 4px rgba(0, 77, 64, 0.1)"; // Softer teal-tinted shadow
 
     const canvas = document.createElement("canvas");
     canvas.id = id;
@@ -92,9 +99,7 @@ export class ImagePanel {
     canvas.height = 512;
     Object.assign(canvas.style, {
       maxWidth: "100%",
-      maxHeight: "85%",
-      borderRadius: "8px",
-      boxShadow: "0 4px 8px rgba(0, 0, 0, 0.3)",
+      maxHeight: "100%",
       transformOrigin: "center center", // Default zoom origin
       transition: "transform 0.1s ease-out", // Smooth zoom effect
     });
@@ -107,15 +112,16 @@ export class ImagePanel {
       position: "absolute",
       top: "10px",
       left: "10px",
-      backgroundColor: "rgba(255, 255, 255, 0.7)",
-      color: "#000",
-      padding: "3px 6px",
+      backgroundColor: "rgba(224, 242, 241, 0.85)", // Light teal background
+      color: "#004d40", // Dark teal text for better contrast
+      padding: "4px 8px",
       fontSize: "11px",
       fontWeight: "bold",
       fontFamily: "monospace",
-      borderRadius: "4px",
-      zIndex: "50", // Reduced from 100 to be below status dropdown but above canvas
+      borderRadius: "6px",
+      zIndex: "100", // Higher z-index to stay above zoomed canvas
       pointerEvents: "none", // Don't interfere with mouse events
+      boxShadow: "0 2px 4px rgba(0, 0, 0, 0.1)", // Subtle shadow
     });
 
     // Add wheel event listener for zooming
@@ -229,22 +235,54 @@ export class ImagePanel {
       // Instead, maintain the current zoom level and origin
       const currentZoom = this.zoomLevels[canvas.id] || 1;
 
-      // Resize canvas to match image dimensions
-      canvas.width = img.width;
-      canvas.height = img.height;
+      // Apply scaling factor to make images larger
+      const scaledWidth = Math.round(img.width * this.scaleFactor);
+      const scaledHeight = Math.round(img.height * this.scaleFactor);
 
-      // Clear canvas and draw image
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      // Resize canvas to match scaled image dimensions
+      canvas.width = scaledWidth;
+      canvas.height = scaledHeight;
 
-      // Draw native contours based on visibility settings
-      this.drawContours(ctx, imageData);
+      // Clear canvas and draw scaled image
+      ctx.clearRect(0, 0, scaledWidth, scaledHeight);
+      ctx.drawImage(img, 0, 0, scaledWidth, scaledHeight);
 
-      // Draw projected contours if enabled
-      if (isReference && this.projectMeasOnRef && otherImageData) {
-        this.drawProjectedContours(ctx, otherImageData);
-      } else if (!isReference && this.projectRefOnMeas && otherImageData) {
-        this.drawProjectedContours(ctx, otherImageData);
+      // Scale contour coordinates
+      const scaleContourPoints = (points) => {
+        if (!points || points.length === 0) return points;
+        return points.map((point) => [
+          point[0] * this.scaleFactor,
+          point[1] * this.scaleFactor,
+        ]);
+      };
+
+      // Create scaled contour data for drawing
+      const scaledImageData = { ...imageData };
+      const scaledOtherImageData = otherImageData
+        ? { ...otherImageData }
+        : null;
+
+      // Scale contour coordinates for each contour type
+      Object.keys(this.contourVisibility).forEach((type) => {
+        if (imageData[type])
+          scaledImageData[type] = scaleContourPoints(imageData[type]);
+        if (otherImageData && otherImageData[type]) {
+          scaledOtherImageData[type] = scaleContourPoints(otherImageData[type]);
+        }
+      });
+
+      // Draw native contours based on visibility settings (with scaled coordinates)
+      this.drawContours(ctx, scaledImageData);
+
+      // Draw projected contours if enabled (with scaled coordinates)
+      if (isReference && this.projectMeasOnRef && scaledOtherImageData) {
+        this.drawProjectedContours(ctx, scaledOtherImageData);
+      } else if (
+        !isReference &&
+        this.projectRefOnMeas &&
+        scaledOtherImageData
+      ) {
+        this.drawProjectedContours(ctx, scaledOtherImageData);
       }
 
       // Reapply zoom after drawing new frame
@@ -284,27 +322,46 @@ export class ImagePanel {
     Object.keys(this.contourVisibility).forEach((contourType) => {
       if (this.contourVisibility[contourType] && imageData[contourType]) {
         const points = imageData[contourType];
-        if (points && points.length > 0) {
-          ctx.beginPath();
-          ctx.moveTo(points[0][0], points[0][1]);
+        if (!points || points.length < 3) return; // Skip if too few points
 
-          // Draw lines connecting all points
-          for (let i = 1; i < points.length; i++) {
-            ctx.lineTo(points[i][0], points[i][1]);
+        // Check if this is likely a closed shape (first and last points are close)
+        const firstPoint = points[0];
+        const lastPoint = points[points.length - 1];
+        const isClosedShape = this.isCloseEnough(firstPoint, lastPoint, 5);
+
+        // Detect potential sub-contours by finding large jumps between points
+        const subContours = this.splitIntoSubContours(points);
+
+        // Draw each sub-contour separately
+        subContours.forEach((subPoints) => {
+          if (subPoints.length < 2) return; // Need at least 2 points to draw a line
+
+          ctx.beginPath();
+          ctx.moveTo(subPoints[0][0], subPoints[0][1]);
+
+          // Draw lines connecting all points in this sub-contour
+          for (let i = 1; i < subPoints.length; i++) {
+            ctx.lineTo(subPoints[i][0], subPoints[i][1]);
           }
 
           // Style and stroke the path - solid line for native contours
           ctx.strokeStyle = contourColors[contourType];
           ctx.lineWidth = 3;
           ctx.setLineDash([]); // Solid line
+
+          // Close the path if it appears to be a closed shape and has enough points
+          if (isClosedShape && subPoints.length > 2) {
+            ctx.closePath();
+          }
+
           ctx.stroke();
-        }
+        });
       }
     });
   }
 
   /**
-   * Draw projected contours with dashed lines
+   * Draw projected contours with darker tones and dashed lines
    * @param {CanvasRenderingContext2D} ctx - Canvas 2D context
    * @param {Object} imageData - Image data with contours to project
    */
@@ -322,26 +379,149 @@ export class ImagePanel {
     Object.keys(this.contourVisibility).forEach((contourType) => {
       if (this.contourVisibility[contourType] && imageData[contourType]) {
         const points = imageData[contourType];
-        if (points && points.length > 0) {
-          ctx.beginPath();
-          ctx.moveTo(points[0][0], points[0][1]);
+        if (!points || points.length < 3) return; // Skip if too few points
 
-          // Draw lines connecting all points
-          for (let i = 1; i < points.length; i++) {
-            ctx.lineTo(points[i][0], points[i][1]);
+        // Check if this is likely a closed shape (first and last points are close)
+        const firstPoint = points[0];
+        const lastPoint = points[points.length - 1];
+        const isClosedShape = this.isCloseEnough(firstPoint, lastPoint, 5);
+
+        // Detect potential sub-contours by finding large jumps between points
+        const subContours = this.splitIntoSubContours(points);
+
+        // Draw each sub-contour separately
+        subContours.forEach((subPoints) => {
+          if (subPoints.length < 2) return; // Need at least 2 points to draw a line
+
+          ctx.beginPath();
+          ctx.moveTo(subPoints[0][0], subPoints[0][1]);
+
+          // Draw lines connecting all points in this sub-contour
+          for (let i = 1; i < subPoints.length; i++) {
+            ctx.lineTo(subPoints[i][0], subPoints[i][1]);
           }
 
+          // Get base color
+          const baseColor = contourColors[contourType];
+
+          // Darken color by 30%
+          const darkColor = this.darkenColor(baseColor, 0.7);
+
           // Style and stroke the path - dashed line for projected contours
-          ctx.strokeStyle = contourColors[contourType];
-          ctx.lineWidth = 2;
-          ctx.setLineDash([5, 5]); // Dashed line pattern
+          ctx.strokeStyle = darkColor;
+          ctx.lineWidth = 3; // Thicker lines for better visibility
+          ctx.setLineDash([5, 5]); // Re-enable dashed line pattern for cross-projections
+
+          // Close the path if it appears to be a closed shape and has enough points
+          if (isClosedShape && subPoints.length > 2) {
+            ctx.closePath();
+          }
+
           ctx.stroke();
-        }
+        });
       }
     });
 
     // Reset line dash to avoid affecting other drawings
     ctx.setLineDash([]);
+  }
+
+  /**
+   * Darken a color by a specified factor
+   * @param {string} hexColor - The hex color to darken
+   * @param {number} factor - The darkening factor (0-1)
+   * @returns {string} - The darkened color as hex
+   */
+  darkenColor(hexColor, factor) {
+    // Handle invalid inputs
+    if (
+      !hexColor ||
+      typeof hexColor !== "string" ||
+      !hexColor.startsWith("#")
+    ) {
+      return hexColor; // Return original if invalid
+    }
+
+    try {
+      // Convert hex to RGB
+      let r = parseInt(hexColor.substring(1, 3), 16);
+      let g = parseInt(hexColor.substring(3, 5), 16);
+      let b = parseInt(hexColor.substring(5, 7), 16);
+
+      // Darken RGB values
+      r = Math.max(0, Math.floor(r * factor));
+      g = Math.max(0, Math.floor(g * factor));
+      b = Math.max(0, Math.floor(b * factor));
+
+      // Convert back to hex
+      const darkHex =
+        "#" +
+        r.toString(16).padStart(2, "0") +
+        g.toString(16).padStart(2, "0") +
+        b.toString(16).padStart(2, "0");
+
+      return darkHex;
+    } catch (error) {
+      console.error("Error darkening color:", error);
+      return hexColor; // Return original on error
+    }
+  }
+
+  /**
+   * Check if two points are close enough to be considered the same point
+   * @param {Array} point1 - First point [x, y]
+   * @param {Array} point2 - Second point [x, y]
+   * @param {number} threshold - Distance threshold
+   * @returns {boolean} - True if points are close enough
+   */
+  isCloseEnough(point1, point2, threshold = 3) {
+    const dx = point1[0] - point2[0];
+    const dy = point2[1] - point1[1];
+    const distanceSquared = dx * dx + dy * dy;
+    return distanceSquared <= threshold * threshold;
+  }
+
+  /**
+   * Split a contour into sub-contours where there are large jumps between points
+   * @param {Array} points - Array of points [[x, y], ...]
+   * @returns {Array} - Array of sub-contours [[[x, y], ...], ...]
+   */
+  splitIntoSubContours(points) {
+    if (!points || points.length < 2) return [points];
+
+    const subContours = [];
+    let currentSubContour = [points[0]];
+
+    // Distance threshold for considering a point to be part of a new sub-contour
+    const jumpThreshold = 20 * this.scaleFactor; // Scale with the image scaling
+
+    for (let i = 1; i < points.length; i++) {
+      const prevPoint = points[i - 1];
+      const currentPoint = points[i];
+
+      // Calculate distance between consecutive points
+      const dx = currentPoint[0] - prevPoint[0];
+      const dy = currentPoint[1] - prevPoint[1];
+      const distance = Math.sqrt(dx * dx + dy * dy);
+
+      if (distance > jumpThreshold) {
+        // Large jump detected, end current sub-contour and start a new one
+        if (currentSubContour.length > 1) {
+          subContours.push(currentSubContour);
+        }
+        currentSubContour = [currentPoint];
+      } else {
+        // Continue current sub-contour
+        currentSubContour.push(currentPoint);
+      }
+    }
+
+    // Add the last sub-contour if it has points
+    if (currentSubContour.length > 1) {
+      subContours.push(currentSubContour);
+    }
+
+    return subContours.length > 0 ? subContours : [points];
   }
 
   /**

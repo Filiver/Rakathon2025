@@ -2,28 +2,38 @@ from shapely.geometry import Polygon
 import torch  # Assuming tensors are PyTorch tensors
 
 dangerous = [("spinalcord", "ptv_low"), ("spinalcord", "ptv_high"),
-             ("ptv_low", "ctv_low")]
+             ("ptv_low", "parotid_l"), ("ptv_high", "parotid_l"),
+             ("ptv_low", "parotid_r"), ("ptv_high", "parotid_r"),
+             ("ptv_low", "esophagus"), ("ptv_high", "esophagus"),
+             ("ptv_low", "ctv_low"), ("ptv_high", "ctv_low"),
+             ("ptv_low", "ctv_high"), ("ptv_high", "ctv_high")]
 
 
 def detect_intersect(contours_meas_torch_dict, overlap_threshold_percent=0.0):
     """
     Detects intersections between specified contour pairs within a single dataset
-    and quantifies the overlap.
+    and quantifies the overlap per slice and the overall intersection volume percentage.
 
     Args:
         contours_meas_torch_dict (dict): Dictionary containing contour data,
                                          expected to have a "binned_z_transform" key
                                          where the value is {contour_name: {slice_idx: tensor}}.
                                          Coordinates are assumed to be in mm.
-        overlap_threshold_percent (float): Minimum overlap percentage (relative to the
-                                           larger contour) to consider as an intersection.
+        overlap_threshold_percent (float): Minimum per-slice overlap percentage (relative to the
+                                           larger contour) to consider an intersection on that slice.
                                            Defaults to 0.0 (any overlap).
 
     Returns:
-        dict: A dictionary where keys are the dangerous pairs (tuples) and
-              values are lists of tuples, each containing
-              (slice_index, overlap_percentage, intersection_area_mm2).
-              Only includes pairs and slices where overlap exceeds the threshold.
+        dict: A dictionary where keys are the dangerous pairs (tuples) that have
+              at least one slice exceeding the overlap threshold. Values are tuples:
+              (list_of_slice_data, intersection_volume_percent).
+              - list_of_slice_data: List of tuples, each containing
+                (slice_index, overlap_percentage, intersection_area_mm2).
+                Only includes slices where per-slice overlap exceeds the threshold.
+              - intersection_volume_percent: Float representing the percentage
+                calculated as (sum of intersection areas across all common slices) /
+                (sum of the first contour's areas across all common slices) * 100.
+                Returns 0.0 if the sum of the first contour's areas is zero.
     """
     intersections = {}
     # Check if the main key exists
@@ -48,6 +58,9 @@ def detect_intersect(contours_meas_torch_dict, overlap_threshold_percent=0.0):
 
         # Store tuples of (slice_idx, overlap_percent, intersection_area_mm2)
         intersecting_slices_data = []
+        total_intersection_area_sum = 0.0
+        total_contour1_area_sum = 0.0  # Use first contour of the pair as reference volume
+
         for slice_idx in common_slices:
             # Ensure slice exists for both (redundant check due to common_slices, but safe)
             if slice_idx not in contours1_dict or slice_idx not in contours2_dict:
@@ -79,40 +92,66 @@ def detect_intersect(contours_meas_torch_dict, overlap_threshold_percent=0.0):
                 if not poly2.is_valid:
                     poly2 = poly2.buffer(0)
 
-                # Ensure polygons are still valid after buffer(0) and have non-zero area
+                # Accumulate area for the first contour if valid and non-zero
+                if poly1.is_valid and poly1.area > 0:
+                    total_contour1_area_sum += poly1.area
+
+                # Ensure polygons are still valid after buffer(0) and have non-zero area for intersection check
                 if not poly1.is_valid or not poly2.is_valid or poly1.area == 0 or poly2.area == 0:
-                    continue
+                    continue  # Cannot calculate intersection or meaningful overlap
 
                 # Check intersection and calculate overlap percentage
+                current_intersection_area_mm2 = 0.0
                 if poly1.intersects(poly2):
                     intersection_poly = poly1.intersection(poly2)
-                    # Ensure intersection is a Polygon
+                    # Ensure intersection is a Polygon or MultiPolygon (sum areas if Multi)
                     if isinstance(intersection_poly, Polygon):
-                        intersection_area_mm2 = intersection_poly.area
-                    else:
-                        intersection_area_mm2 = 0.0
+                        current_intersection_area_mm2 = intersection_poly.area
+                    # Handle MultiPolygon, GeometryCollection etc.
+                    elif hasattr(intersection_poly, 'geoms'):
+                        current_intersection_area_mm2 = sum(
+                            p.area for p in intersection_poly.geoms if isinstance(p, Polygon))
 
-                    # Calculate overlap relative to the area of the LARGER polygon
-                    larger_area = max(poly1.area, poly2.area)
-                    if larger_area > 0:
-                        overlap_percent = (
-                            intersection_area_mm2 / larger_area) * 100
-                    else:
-                        overlap_percent = 0.0
+                # Add the intersection area of this slice to the total sum
+                total_intersection_area_sum += current_intersection_area_mm2
 
+                # Calculate per-slice overlap relative to the area of the LARGER polygon
+                # Already checked areas > 0
+                larger_area = max(poly1.area, poly2.area)
+                overlap_percent = (
+                    current_intersection_area_mm2 / larger_area) * 100
+
+                # Add slice data only if per-slice overlap meets the threshold criteria
+                add_slice = False
+                if overlap_threshold_percent > 0:
                     if overlap_percent >= overlap_threshold_percent:
-                        intersecting_slices_data.append(
-                            (slice_idx, overlap_percent, intersection_area_mm2))
+                        add_slice = True
+                # If threshold is 0.0, only add if the actual intersection area is positive
+                elif current_intersection_area_mm2 > 0:
+                    add_slice = True
+
+                if add_slice:
+                    intersecting_slices_data.append(
+                        (slice_idx, overlap_percent, current_intersection_area_mm2))
 
             except Exception as e:
                 print(
                     f"Error processing polygons on slice {slice_idx} for pair {pair}: {e}")
                 continue
 
-        if intersecting_slices_data:
-            # Sort by slice index
-            intersections[pair] = sorted(
+        # After processing all common slices for the pair:
+        if intersecting_slices_data:  # Only store if at least one slice met the threshold
+            # Calculate overall intersection volume percentage relative to contour1's volume
+            intersection_volume_percent = 0.0
+            if total_contour1_area_sum > 0:
+                intersection_volume_percent = (
+                    total_intersection_area_sum / total_contour1_area_sum) * 100
+
+            # Sort slice data by slice index
+            sorted_slice_data = sorted(
                 intersecting_slices_data, key=lambda x: x[0])
+            intersections[pair] = (
+                sorted_slice_data, intersection_volume_percent)
 
     return intersections
 
@@ -202,8 +241,7 @@ def compare_contour_sets(binned_z_transform, binned_z_original, overlap_threshol
                 if not poly_original.is_valid:
                     poly_original = poly_original.buffer(0)
 
-                # Ensure polygons are still valid after buffer(0) and have non-zero area
-                # We need original area even if transform area is zero for volume calc
+                # Ensure original polygon is valid and has non-zero area for volume calc
                 if not poly_original.is_valid or poly_original.area == 0:
                     continue  # Skip slice if original is invalid or has no area
 
@@ -212,26 +250,30 @@ def compare_contour_sets(binned_z_transform, binned_z_original, overlap_threshol
 
                 # Check transform polygon validity for intersection calculation
                 if not poly_transform.is_valid or poly_transform.area == 0:
-                    continue  # Skip intersection calculation if transform is invalid/zero area
+                    # Still count original area above, but skip intersection calc for this slice
+                    continue
 
                 # Check intersection and calculate overlap percentage and area
                 current_intersection_area_mm2 = 0.0
                 if poly_transform.intersects(poly_original):
                     intersection_poly = poly_transform.intersection(
                         poly_original)
+                    # Handle Polygon and MultiPolygon cases for area calculation
                     if isinstance(intersection_poly, Polygon):
                         current_intersection_area_mm2 = intersection_poly.area
+                    # Handle MultiPolygon, GeometryCollection etc.
+                    elif hasattr(intersection_poly, 'geoms'):
+                        current_intersection_area_mm2 = sum(
+                            p.area for p in intersection_poly.geoms if isinstance(p, Polygon))
 
                 # Add current intersection area to total for volume calculation
                 total_intersection_area += current_intersection_area_mm2
 
                 # Calculate per-slice overlap percentage relative to the LARGER polygon
+                # Areas > 0 checked above
                 larger_area = max(poly_transform.area, poly_original.area)
-                if larger_area > 0:
-                    overlap_percent = (
-                        current_intersection_area_mm2 / larger_area) * 100
-                else:
-                    overlap_percent = 0.0
+                overlap_percent = (
+                    current_intersection_area_mm2 / larger_area) * 100
 
                 # Add to slice list only if per-slice threshold is met
                 if overlap_percent >= overlap_threshold_percent:
@@ -249,14 +291,16 @@ def compare_contour_sets(binned_z_transform, binned_z_original, overlap_threshol
             overall_volume_overlap_percent = (
                 total_intersection_area / total_original_area) * 100
 
-        # Store results if there's any slice data or if volume overlap is meaningful
-        # (Adjust this condition based on whether you want entries even with 0 overlap)
-        if slice_comparison_data or overall_volume_overlap_percent > 0:
+        # Store results if there's any slice data meeting the threshold
+        if slice_comparison_data:
             # Sort slice data by slice index
             sorted_slice_data = sorted(
                 slice_comparison_data, key=lambda x: x[0])
             comparison_results[contour_name] = (
                 sorted_slice_data, overall_volume_overlap_percent)
+        # Optionally, store even if no slices meet threshold but volume overlap > 0
+        # elif overall_volume_overlap_percent > 0:
+        #     comparison_results[contour_name] = ([], overall_volume_overlap_percent)
 
     return comparison_results
 
@@ -264,13 +308,15 @@ def compare_contour_sets(binned_z_transform, binned_z_original, overlap_threshol
 # threshold = 5.0
 # intersections_found = detect_intersect(contours_meas_torch_dict, overlap_threshold_percent=threshold)
 # if intersections_found:
-#     print(f"Found intersections between dangerous pairs (overlap > {threshold}%):")
-#     for pair, slice_data in intersections_found.items():
-#         print(f"  {pair[0]} and {pair[1]} intersect on slices:")
+#     print(f"Found intersections between dangerous pairs (per-slice overlap > {threshold}%):")
+#     for pair, (slice_data, volume_percent) in intersections_found.items():
+#         print(f"  {pair[0]} and {pair[1]}:")
+#         print(f"    Overall Intersection Volume: {volume_percent:.2f}% (relative to {pair[0]})")
+#         print(f"    Intersecting slices meeting threshold:")
 #         for slice_idx, overlap, area in slice_data: # Unpack the tuple
-#             print(f"    Slice {slice_idx}: {overlap:.2f}% overlap, {area:.2f} mm^2 area")
+#             print(f"      Slice {slice_idx}: {overlap:.2f}% overlap, {area:.2f} mm^2 area")
 # else:
-#     print(f"No intersections found between dangerous pairs with overlap > {threshold}%.")
+#     print(f"No intersections found between dangerous pairs with per-slice overlap > {threshold}%.")
 
 
 # Example Usage for compare_contour_sets:
@@ -282,12 +328,13 @@ def compare_contour_sets(binned_z_transform, binned_z_original, overlap_threshol
 #     print(f"Comparison Results (Per-slice overlap threshold >= {threshold_comp}%):")
 #     for contour_name, (slice_data, volume_overlap) in comparison.items():
 #         print(f"  Contour '{contour_name}':")
-#         print(f"    Overall Volume Overlap: {volume_overlap:.2f}%")
+#         print(f"    Overall Volume Overlap: {volume_overlap:.2f}% (relative to original)")
 #         if slice_data:
 #             print(f"    Slices meeting threshold:")
 #             for slice_idx, overlap, area in slice_data:
 #                 print(f"      Slice {slice_idx}: {overlap:.2f}% overlap, {area:.2f} mm^2 area")
 #         else:
+#             # This part might not be reached depending on the storage condition chosen above
 #             print("    No individual slices met the overlap threshold.")
 # else:
-#     print(f"No common contours found or no overlaps detected.")
+#     print(f"No common contours found or no overlaps detected meeting the threshold.")
