@@ -73,7 +73,7 @@ def plot_contours_3d(points_a: np.ndarray, points_b: np.ndarray, output_file: st
     plt.close()
 
 
-def compute_point_to_point_distance(contour_a: np.ndarray, contour_b: np.ndarray, threshold: float):
+def compute_point_to_point_distance_3d(contour_a: np.ndarray, contour_b: np.ndarray, threshold: float):
     """
     Compute point-to-point distances between two 3D point clouds and report statistics.
 
@@ -256,7 +256,7 @@ def compare_contours(c1, c2, threshold: float) -> dict:
     
     # print(f"Using threshold: {threshold} mm")
     
-    ptpd = compute_point_to_point_distance(c1, c2, threshold)
+    ptpd = compute_point_to_point_distance_3d(c1, c2, threshold)
     segments = segment_contour_by_proximity(c1, radius=contour_segmentation_radius)
     # Filter segments to include only those with 10 or more points
     filtered_segments = [seg for seg in segments if len(seg) >= 10]
