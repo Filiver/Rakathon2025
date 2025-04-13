@@ -5,6 +5,7 @@ import torch
 from scipy.spatial import cKDTree
 from contour_slice_test_generator import generate_ellipse_points
 from constants import *
+from contours_finder import binned_metric_xy_to_image_hw
 
 def load_points_from_pkl(filepath):
     with open(filepath, "rb") as f:
@@ -104,7 +105,7 @@ def compare_contour_slices(points1, points2, threshold=2.0):
     exceeded = len(problem_points) > 0
     return exceeded, problem_points
 
-def compare_contour_slices_2d(points1, points2, threshold=2.0):
+def compare_contour_slices_2d(points1, points2, origin_zyx, spacing_zyx, depth, threshold=2.0):
     """
     Compare two sets of 2D points in the same slice and check if local shift exceeds threshold.
 
@@ -131,46 +132,17 @@ def compare_contour_slices_2d(points1, points2, threshold=2.0):
     for i, dist in enumerate(distances):
         if dist > threshold:
             # Add to problem points if the distance exceeds threshold
-            problem_points.append((points1[i], points2[indices[i]], dist))
+            problem_points.append(
+                (binned_metric_xy_to_image_hw({depth: points1[i]}, origin_zyx, spacing_zyx),
+                 binned_metric_xy_to_image_hw({depth: points2[indices[i]]}, origin_zyx, spacing_zyx),
+                 dist))
+
+
 
     exceeded = len(problem_points) > 0
     return exceeded, problem_points
 
-def process_contours(orig, transf, threshold=2.0):
-    """
-    Process both original and transformed contour data for each body part and slice.
-    
-    Args:
-        orig (dict): Original contour data with body parts as keys and slice data as nested dicts.
-        transf (dict): Transformed contour data with body parts as keys and slice data as nested dicts.
-        threshold (float): The threshold for considering a point as problematic.
-    
-    Returns:
-        dict: A dictionary with the structure:
-            {body_part: {slice_number: list_of_problematic_points}}
-    """
-    results = {}
-    
-    for body_part in orig.keys():
-        part_results = {}
-        
-        for slice_num in orig[body_part].keys():
-            slice1 = orig[body_part][slice_num].numpy()  # Assuming tensors, convert to numpy arrays
-            slice2 = transf[body_part][slice_num].numpy()
-            
-            # Compare the slices and get the problematic points
-            exceeded, problems = compare_contour_slices_2d(slice1, slice2, threshold)
-            
-            # Store the problems for this body part and slice
-            part_results[slice_num] = problems
-        
-        # Store the results for this body part
-        results[body_part] = part_results
-    
-    return results
-
-
-def process_contours(orig, transf):
+def process_contours(orig, transf, origin_zyx, spacing_zyx):
     """
     Process both original and transformed contour data for each body part and slice.
     
@@ -204,25 +176,76 @@ def process_contours(orig, transf):
         
         if threshold is None:
             raise ValueError(f"Unknown body part: {body_part}")
- 
         
         for slice_num in orig[body_part].keys():
-            # Check if the slice exists in the transformed contours as well
-            if slice_num in transf[body_part]:
-                slice1 = orig[body_part][slice_num].numpy()  # Assuming tensors, convert to numpy arrays
-                slice2 = transf[body_part][slice_num].numpy()
-                
-                # Compare the slices and get the problematic points
-                exceeded, problems = compare_contour_slices_2d(slice1, slice2, threshold)
-                
-                # Store the problems for this body part and slice
-                part_results[slice_num] = problems
-            else:
-                # If slice is missing in transf, you can decide how to handle this case (e.g., skip, or log an error)
-                print(f"Warning: Slice {slice_num} missing in transformed data for body part {body_part}")
+            slice1 = orig[body_part][slice_num].numpy()  # Assuming tensors, convert to numpy arrays
+            slice2 = transf[body_part][slice_num].numpy()
+            
+            # Compare the slices and get the problematic points
+            exceeded, problems = compare_contour_slices_2d(slice1, slice2, origin_zyx, spacing_zyx, slice_num, threshold)
+            
+            # Store the problems for this body part and slice
+            part_results[slice_num] = problems
         
         # Store the results for this body part
         results[body_part] = part_results
+    
+    return results
+
+
+# def process_contours(orig, transf):
+#     """
+#     Process both original and transformed contour data for each body part and slice.
+    
+#     Args:
+#         orig (dict): Original contour data with body parts as keys and slice data as nested dicts.
+#         transf (dict): Transformed contour data with body parts as keys and slice data as nested dicts.
+#         threshold (float): The threshold for considering a point as problematic.
+    
+#     Returns:
+#         dict: A dictionary with the structure:
+#             {body_part: {slice_number: list_of_problematic_points}}
+#     """
+#     results = {}
+    
+#     for body_part in orig.keys():
+#         part_results = {}
+#         threshold = None
+#         match body_part:
+#             case 'parotid_l' | 'parotid_r':
+#                 threshold = thresh_parotid
+#             case 'submandibular_l' | 'submandibular_r' | 'glnd_submand_l' | 'glnd_submand_r':
+#                 threshold = thresh_submandibular_gland
+#             case 'esophagus':
+#                 threshold = thresh_esophagus
+#             case 'spinal_cord' | 'spinalcord_prv' | 'spinalcord':
+#                 threshold = thresh_spinal_cord
+#             case 'ctv_low' | 'ctv_high':
+#                 threshold = thresh_CTV
+#             case 'ptv_low' | 'ptv_mid00':
+#                 threshold = thresh_PTV
+        
+#         if threshold is None:
+#             raise ValueError(f"Unknown body part: {body_part}")
+ 
+        
+#         for slice_num in orig[body_part].keys():
+#             # Check if the slice exists in the transformed contours as well
+#             if slice_num in transf[body_part]:
+#                 slice1 = orig[body_part][slice_num].numpy()  # Assuming tensors, convert to numpy arrays
+#                 slice2 = transf[body_part][slice_num].numpy()
+                
+#                 # Compare the slices and get the problematic points
+#                 exceeded, problems = compare_contour_slices_2d(slice1, slice2, threshold)
+                
+#                 # Store the problems for this body part and slice
+#                 part_results[slice_num] = problems
+#             else:
+#                 # If slice is missing in transf, you can decide how to handle this case (e.g., skip, or log an error)
+#                 print(f"Warning: Slice {slice_num} missing in transformed data for body part {body_part}")
+        
+#         # Store the results for this body part
+#         results[body_part] = part_results
     
     return results
 
@@ -264,7 +287,7 @@ if __name__ == "__main__":
     transf = pts['binned_z_transform']
 
     result = process_contours(orig, transf)
-    print(result)
+    print(result['spinalcord'].keys())
 
     # print(transf.keys())
     # Load the points from the pickle files
