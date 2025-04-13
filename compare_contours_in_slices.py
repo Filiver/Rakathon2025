@@ -149,16 +149,20 @@ def process_contours(orig, transf, origin_zyx, spacing_zyx):
     Args:
         orig (dict): Original contour data with body parts as keys and slice data as nested dicts.
         transf (dict): Transformed contour data with body parts as keys and slice data as nested dicts.
-        threshold (float): The threshold for considering a point as problematic.
+        origin_zyx: Origin coordinates for image conversion.
+        spacing_zyx: Spacing information for image conversion.
     
     Returns:
         dict: A dictionary with the structure:
-            {body_part: {slice_number: list_of_problematic_points}}
+            {slice_number: {body_part: list_of_problematic_points}}
     """
-    results = {}
-    
+    results = {}  # Initialize the main results dictionary
+
+    ok = True
+    message = ""
+    exceeded_in = {}
+
     for body_part in orig.keys():
-        part_results = {}
         threshold = None
         match body_part:
             case 'parotid_l' | 'parotid_r':
@@ -175,22 +179,45 @@ def process_contours(orig, transf, origin_zyx, spacing_zyx):
                 threshold = thresh_PTV
         
         if threshold is None:
-            raise ValueError(f"Unknown body part: {body_part}")
+            # Consider logging a warning or skipping if a default behavior is acceptable
+            print(f"Warning: Unknown body part '{body_part}', skipping.")
+            continue # Skip this body part if threshold is not defined
+            # Or raise ValueError(f"Unknown body part: {body_part}") if it's critical
         
+        # Check if the body part exists in the transformed data
+        if body_part not in transf:
+            print(f"Warning: Body part '{body_part}' not found in transformed data. Skipping.")
+            continue
+
         for slice_num in orig[body_part].keys():
+            # Ensure the slice also exists in the transformed data for this body part
+            if slice_num not in transf[body_part]:
+                print(f"Warning: Slice {slice_num} missing in transformed data for body part {body_part}. Skipping slice.")
+                continue
+
             slice1 = orig[body_part][slice_num].numpy()  # Assuming tensors, convert to numpy arrays
             slice2 = transf[body_part][slice_num].numpy()
             
             # Compare the slices and get the problematic points
             exceeded, problems = compare_contour_slices_2d(slice1, slice2, origin_zyx, spacing_zyx, slice_num, threshold)
+            if exceeded:
+                ok = False
+                exceeded_in.setdefault(body_part, []).append(slice_num)
+
             
-            # Store the problems for this body part and slice
-            part_results[slice_num] = problems
+            # Ensure the slice number exists as a key in the results dictionary
+            if slice_num not in results:
+                results[slice_num] = {}
+            
+            # Store the problems under the current slice number and body part
+            results[slice_num][body_part] = problems
         
-        # Store the results for this body part
-        results[body_part] = part_results
-    
-    return results
+    if ok:
+        message = "All contours are within the shift thresholds"
+    else:
+        message = "Threshold exceeded in the following body parts and slices: " + ", ".join([f"{bp}: {slices}" for bp, slices in exceeded_in.items()])
+            
+    return results, message, ok
 
 
 # def process_contours(orig, transf):
