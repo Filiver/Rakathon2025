@@ -1,0 +1,18 @@
+[project]
+name = "rakathon2025radioprotect"
+version = "1.0.0"
+description = "CT scan alignment and registration for radiation treatment safety assurance"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "torch",
+    "numpy",
+    "pandas",
+    "matplotlib",
+    "flask",
+    "flask_socketio",
+    "eventlet",
+    "torchvision",
+    "simpleitk",
+    "pydicom",
+]

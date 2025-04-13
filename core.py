@@ -3,10 +3,10 @@ import datetime
 import torch
 import os
 from pointcloud_alignment.fourier import align_measurement_to_reference_scan, dicom_filenames_from_dir
-from contours_finder import find_all_contours_in_meas
-from itk import process_rt_ct_pairs
+from contours.contours_finder import find_all_contours_in_meas
+from contours.itk import process_rt_ct_pairs
 from pathlib import Path
-from visualize_conturs import visualize_all_contours_from_dict, visualize_two_contour_dicts, visualize_all_contours_from_dict2
+from vis.visualize_conturs import visualize_all_contours_from_dict, visualize_two_contour_dicts, visualize_all_contours_from_dict2
 import numpy as np
 
 HERE = Path(__file__).parent

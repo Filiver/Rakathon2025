@@ -3,15 +3,16 @@ import pickle
 import matplotlib.pyplot as plt
 import torch
 from scipy.spatial import cKDTree
-from contour_slice_test_generator import generate_ellipse_points
-from constants import *
-from contours_finder import binned_metric_xy_to_image_hw
-from compare_contours import compute_point_to_point_distance_3d
+from contours.contour_slice_test_generator import generate_ellipse_points
+from misc_data.constants import *
+from contours.contours_finder import binned_metric_xy_to_image_hw
+from contours.compare_contours import compute_point_to_point_distance_3d
 
 
 def load_points_from_pkl(filepath):
     with open(filepath, "rb") as f:
         return pickle.load(f)
+
 
 def filter_by_z(points1, points2):
     # Extract the z-values (assuming they're whole numbers already)
@@ -29,26 +30,28 @@ def filter_by_z(points1, points2):
     return slices1, slices2
 
 
-def round_z_coordinates_tensor(points, method='round'):
+def round_z_coordinates_tensor(points, method="round"):
     """
     Round or floor the z-coordinates of the points in a tensor to the nearest whole number.
-    
+
     Parameters:
     - points: torch.Tensor of shape (N, 3)
     - method: 'round' for rounding or 'floor' for flooring the z-coordinate
     """
     points_rounded = points.clone()  # Create a clone to avoid modifying the original tensor
-    if method == 'round':
+    if method == "round":
         points_rounded[:, 2] = torch.round(points_rounded[:, 2])
-    elif method == 'floor':
+    elif method == "floor":
         points_rounded[:, 2] = torch.floor(points_rounded[:, 2])  # or torch.ceil() for ceiling if needed
     return points_rounded
+
 
 def to_numpy(arr):
     """Convert torch tensor or leave numpy array unchanged."""
     if isinstance(arr, torch.Tensor):
         return arr.detach().cpu().numpy()
     return arr
+
 
 def plot_contour_slices(points1, points2, filepath="contour_comparison.png", label1="Set 1", label2="Set 2"):
     """
@@ -65,8 +68,8 @@ def plot_contour_slices(points1, points2, filepath="contour_comparison.png", lab
 
     # Plotting
     plt.figure(figsize=(6, 6))
-    plt.scatter(x1, y1, c='blue', label=label1, s=10, alpha=0.6)
-    plt.scatter(x2, y2, c='red', label=label2, s=10, alpha=0.6)
+    plt.scatter(x1, y1, c="blue", label=label1, s=10, alpha=0.6)
+    plt.scatter(x2, y2, c="red", label=label2, s=10, alpha=0.6)
 
     plt.xlabel("X (mm)")
     plt.ylabel("Y (mm)")
@@ -78,6 +81,7 @@ def plot_contour_slices(points1, points2, filepath="contour_comparison.png", lab
     # Save and close
     plt.savefig(filepath)
     plt.close()
+
 
 def compare_contour_slices(points1, points2, threshold=2.0):
     """
@@ -107,6 +111,7 @@ def compare_contour_slices(points1, points2, threshold=2.0):
     exceeded = len(problem_points) > 0
     return exceeded, problem_points
 
+
 def compare_contour_slices_2d(points1, points2, origin_zyx, spacing_zyx, depth, threshold=2.0):
     """
     Compare two sets of 2D points in the same slice and check if local shift exceeds threshold.
@@ -135,25 +140,27 @@ def compare_contour_slices_2d(points1, points2, origin_zyx, spacing_zyx, depth, 
         if dist > threshold:
             # Add to problem points if the distance exceeds threshold
             problem_points.append(
-                (binned_metric_xy_to_image_hw({depth: points1[i]}, origin_zyx, spacing_zyx),
-                 binned_metric_xy_to_image_hw({depth: points2[indices[i]]}, origin_zyx, spacing_zyx),
-                 dist))
-
-
+                (
+                    binned_metric_xy_to_image_hw({depth: points1[i]}, origin_zyx, spacing_zyx),
+                    binned_metric_xy_to_image_hw({depth: points2[indices[i]]}, origin_zyx, spacing_zyx),
+                    dist,
+                )
+            )
 
     exceeded = len(problem_points) > 0
     return exceeded, problem_points
 
+
 def process_contours(orig, transf, origin_zyx, spacing_zyx):
     """
     Process both original and transformed contour data for each body part and slice.
-    
+
     Args:
         orig (dict): Original contour data with body parts as keys and slice data as nested dicts.
         transf (dict): Transformed contour data with body parts as keys and slice data as nested dicts.
         origin_zyx: Origin coordinates for image conversion.
         spacing_zyx: Spacing information for image conversion.
-    
+
     Returns:
         dict: A dictionary with the structure:
             {slice_number: {body_part: list_of_problematic_points}}
@@ -168,32 +175,32 @@ def process_contours(orig, transf, origin_zyx, spacing_zyx):
     for body_part in orig.keys():
         threshold = None
         match body_part:
-            case 'parotid_l' | 'parotid_r':
+            case "parotid_l" | "parotid_r":
                 threshold = thresh_parotid
-            case 'submandibular_l' | 'submandibular_r' | 'glnd_submand_l' | 'glnd_submand_r':
+            case "submandibular_l" | "submandibular_r" | "glnd_submand_l" | "glnd_submand_r":
                 threshold = thresh_submandibular_gland
-            case 'esophagus':
+            case "esophagus":
                 threshold = thresh_esophagus
-            case 'spinal_cord' | 'spinalcord_prv' | 'spinalcord':
+            case "spinal_cord" | "spinalcord_prv" | "spinalcord":
                 threshold = thresh_spinal_cord
-            case 'ctv_low' | 'ctv_high':
+            case "ctv_low" | "ctv_high":
                 threshold = thresh_CTV
-            case 'ptv_low' | 'ptv_mid00':
+            case "ptv_low" | "ptv_mid00":
                 threshold = thresh_PTV
-        
+
         if threshold is None:
             # Consider logging a warning or skipping if a default behavior is acceptable
             print(f"Warning: Unknown body part '{body_part}', skipping.")
-            continue # Skip this body part if threshold is not defined
+            continue  # Skip this body part if threshold is not defined
             # Or raise ValueError(f"Unknown body part: {body_part}") if it's critical
-        
+
         # Check if the body part exists in the transformed data
         if body_part not in transf:
             print(f"Warning: Body part '{body_part}' not found in transformed data. Skipping.")
             continue
 
-        body_part_total_exceeded = 0.0 # Initialize per-part total excess
-        body_part_count_exceeded = 0   # Initialize per-part count
+        body_part_total_exceeded = 0.0  # Initialize per-part total excess
+        body_part_count_exceeded = 0  # Initialize per-part count
 
         for slice_num in orig[body_part].keys():
             # Ensure the slice also exists in the transformed data for this body part
@@ -204,43 +211,38 @@ def process_contours(orig, transf, origin_zyx, spacing_zyx):
             slice1 = orig[body_part][slice_num].numpy()  # Assuming tensors, convert to numpy arrays
             slice2 = transf[body_part][slice_num].numpy()
 
-            
             # Compare the slices and get the problematic points
             exceeded, problems = compare_contour_slices_2d(slice1, slice2, origin_zyx, spacing_zyx, slice_num, threshold)
             if exceeded:
                 ok = False
                 exceeded_in.setdefault(body_part, []).append(slice_num)
                 for _, _, dist in problems:
-                    body_part_total_exceeded += abs(dist) # Accumulate per-part excess
-                    body_part_count_exceeded += 1    
-                
+                    body_part_total_exceeded += abs(dist)  # Accumulate per-part excess
+                    body_part_count_exceeded += 1
 
-
-            
             # Ensure the slice number exists as a key in the results dictionary
             if slice_num not in results:
                 results[slice_num] = {}
-            
+
             # Store the problems under the current slice number and body part
             results[slice_num][body_part] = problems
 
         if body_part_count_exceeded > 0:
             average_excess_per_part[body_part] = body_part_total_exceeded / body_part_count_exceeded
 
-        
     if ok:
         # message = "All contours are within the shift thresholds"
         status = {
-                    "message": "All deviations are within limits",
-                    "severity": 0,
-                    "content": {},
-                }
+            "message": "All deviations are within limits",
+            "severity": 0,
+            "content": {},
+        }
     else:
         message_parts = []
-        content_details = {} # Initialize dictionary for status content
+        content_details = {}  # Initialize dictionary for status content
         for bp, slices in exceeded_in.items():
-            avg_excess = average_excess_per_part.get(bp, 0) # Get average, default to 0 if not found
-            sorted_unique_slices = sorted(list(set(slices))) # Get unique, sorted list of slices
+            avg_excess = average_excess_per_part.get(bp, 0)  # Get average, default to 0 if not found
+            sorted_unique_slices = sorted(list(set(slices)))  # Get unique, sorted list of slices
             # Format message part for the overall message string
             message_parts.append(f"{bp} on average by {avg_excess:.2f} mm in slices: {sorted_unique_slices}")
             # Populate the content dictionary for the status object
@@ -249,11 +251,11 @@ def process_contours(orig, transf, origin_zyx, spacing_zyx):
         message = "Threshold exceeded in the following body parts: " + ", ".join(message_parts)
 
         status = {
-                    "message": "Review by a doctor required, deviations detected",
-                    "severity": 1,
-                    "content": content_details, # Assign the populated dictionary here
-                }
-              
+            "message": "Review by a doctor required, deviations detected",
+            "severity": 1,
+            "content": content_details,  # Assign the populated dictionary here
+        }
+
     return results, status, ok
 
 
@@ -270,14 +272,14 @@ def visualize_comparison(points1, points2, problem_points, filepath="comparison_
     fig, ax = plt.subplots(figsize=(8, 8))
 
     # Plot all points as background (light gray)
-    ax.scatter(points1[:, 0], points1[:, 1], c='gray', s=5, label="Ref", alpha=0.3)
-    ax.scatter(points2[:, 0], points2[:, 1], c='blue', s=5, label="Meas", alpha=0.3)
+    ax.scatter(points1[:, 0], points1[:, 1], c="gray", s=5, label="Ref", alpha=0.3)
+    ax.scatter(points2[:, 0], points2[:, 1], c="blue", s=5, label="Meas", alpha=0.3)
 
     # Plot problem points with red line and highlight
     for p1, p2, dist in problem_points:
-        ax.plot([p1[0], p2[0]], [p1[1], p2[1]], 'r-', linewidth=1.5)
-        ax.scatter(p1[0], p1[1], c='red', s=15)
-        ax.scatter(p2[0], p2[1], c='red', s=15, marker='x')
+        ax.plot([p1[0], p2[0]], [p1[1], p2[1]], "r-", linewidth=1.5)
+        ax.scatter(p1[0], p1[1], c="red", s=15)
+        ax.scatter(p2[0], p2[1], c="red", s=15, marker="x")
 
     ax.set_aspect("equal")
     ax.set_title("Comparison of Contours with Problem Areas Highlighted")
@@ -285,17 +287,18 @@ def visualize_comparison(points1, points2, problem_points, filepath="comparison_
     plt.savefig(filepath)
     plt.close()
 
-def compare_all_contours(contours_orig, contours_transf):
-    ...
+
+def compare_all_contours(contours_orig, contours_transf): ...
+
 
 if __name__ == "__main__":
     pts = load_points_from_pkl("rand3.pkl")
     # print(pts.keys())
-    orig = pts['binned_z_original']
-    transf = pts['binned_z_transform']
+    orig = pts["binned_z_original"]
+    transf = pts["binned_z_transform"]
 
     result = process_contours(orig, transf)
-    print(result['spinalcord'].keys())
+    print(result["spinalcord"].keys())
 
     # print(transf.keys())
     # Load the points from the pickle files
@@ -325,8 +328,3 @@ if __name__ == "__main__":
     # plot_contour_slices(points1, points2, filepath="./images/contour_slice_comparison_2.png", label1="Ref", label2="Meas")
     # exceeded, problems = compare_contour_slices(points1, points2, threshold=3.0)
     # visualize_comparison(points1, points2, problems, filepath="./images/comparison_visual_2.png")
-
-
-
-
-

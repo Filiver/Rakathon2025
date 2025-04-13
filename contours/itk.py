@@ -5,7 +5,7 @@ import numpy as np
 import regex as re
 import SimpleITK as sitk
 import scipy.ndimage as ndi
-from organize_new import process_sample
+from dicom_processing.organize_new import process_sample
 
 ROI_intrested = [
     re.compile(r"^gtv.*"),
@@ -17,12 +17,13 @@ ROI_intrested = [
     re.compile(r"submandibular*"),
     re.compile(r"esophagus*"),
     re.compile(r"glnd_submand*"),
-    #re.compile(r"external*"),
+    # re.compile(r"external*"),
 ]
 
 
 def parse_report_file(report_path):
     import re
+
     rs_to_cts = {}
     current_rs = None
 
@@ -31,12 +32,12 @@ def parse_report_file(report_path):
 
     for i, line in enumerate(lines):
         line = line.strip()
-        rs_match = re.search(r'RS File:\s*(.+\.dcm)', line)
+        rs_match = re.search(r"RS File:\s*(.+\.dcm)", line)
         if rs_match:
             current_rs = rs_match.group(1)
             rs_to_cts[current_rs] = []
         elif "Files (Count:" in line and current_rs:
-            ct_files = re.findall(r'(CT\.[^,\s]+\.dcm)', line)
+            ct_files = re.findall(r"(CT\.[^,\s]+\.dcm)", line)
             rs_to_cts[current_rs].extend(ct_files)
 
     print(f"Found {len(rs_to_cts)} RS files with CT references.")
@@ -118,6 +119,7 @@ def load_ordered_ct_series_from_directory(dicom_dir):
 
 def generate_volume_point_cloud(ct_datasets, rgb=True, mask=True):
     import matplotlib.cm as cm
+
     points_list = []
     valid_cts = []
 
@@ -127,8 +129,7 @@ def generate_volume_point_cloud(ct_datasets, rgb=True, mask=True):
             _ = ds.PixelSpacing
             valid_cts.append(ds)
         except AttributeError:
-            print(
-                f"⚠️ Skipping slice without spatial metadata: {getattr(ds, 'SOPInstanceUID', 'UNKNOWN')}")
+            print(f"⚠️ Skipping slice without spatial metadata: {getattr(ds, 'SOPInstanceUID', 'UNKNOWN')}")
 
     if not valid_cts:
         raise ValueError("🚫 No valid CT slices found with spatial metadata!")
@@ -149,7 +150,7 @@ def generate_volume_point_cloud(ct_datasets, rgb=True, mask=True):
             if num == 0:
                 continue
             sizes = ndi.sum(voxel_mask, labeled, range(1, num + 1))
-            voxel_mask = (labeled == (np.argmax(sizes) + 1))
+            voxel_mask = labeled == (np.argmax(sizes) + 1)
         else:
             voxel_mask = np.ones_like(voxel_mask, dtype=bool)
 
@@ -170,10 +171,8 @@ def generate_volume_point_cloud(ct_datasets, rgb=True, mask=True):
         masked_coords = coords[voxel_mask]
 
         if rgb:
-            img_normalized = np.clip(
-                (img.astype(np.float32) + 300) / 1500, 0, 1)
-            colored_img = cm.get_cmap("viridis")(
-                img_normalized)[:, :, :3]  # RGB
+            img_normalized = np.clip((img.astype(np.float32) + 300) / 1500, 0, 1)
+            colored_img = cm.get_cmap("viridis")(img_normalized)[:, :, :3]  # RGB
             masked_rgb = (colored_img[voxel_mask] * 255).astype(np.uint8)
             cloud = np.hstack((masked_coords, masked_rgb))
         else:
@@ -260,8 +259,7 @@ def process_all_rs(directory, output_dir="plots"):
     os.makedirs(img_dir, exist_ok=True)
     os.makedirs(txt_dir, exist_ok=True)
 
-    rtstruct_files = [os.path.join(dp, f) for dp, dn, filenames in os.walk(directory)
-                      for f in filenames if f.lower().endswith(".dcm")]
+    rtstruct_files = [os.path.join(dp, f) for dp, dn, filenames in os.walk(directory) for f in filenames if f.lower().endswith(".dcm")]
 
     sop_to_ct = find_ct_by_sop(directory)
     print(f"🧠 Indexed {len(sop_to_ct)} CT files.")
@@ -296,19 +294,18 @@ def visualize_point_cloud(cloud, num_points=10000):
     Visualize a sample of the point cloud using matplotlib.
     """
     if cloud.shape[0] > num_points:
-        indices = np.random.choice(
-            cloud.shape[0], size=num_points, replace=False)
+        indices = np.random.choice(cloud.shape[0], size=num_points, replace=False)
         cloud = cloud[indices]
 
     fig = plt.figure(figsize=(8, 6))
-    ax = fig.add_subplot(111, projection='3d')
+    ax = fig.add_subplot(111, projection="3d")
 
     x, y, z = cloud[:, 0], cloud[:, 1], cloud[:, 2]
     if cloud.shape[1] == 6:
         colors = cloud[:, 3:] / 255.0
         ax.scatter(x, y, z, c=colors, s=1)
     else:
-        ax.scatter(x, y, z, color='gray', s=1)
+        ax.scatter(x, y, z, color="gray", s=1)
 
     ax.set_xlabel("X (mm)")
     ax.set_ylabel("Y (mm)")
@@ -325,7 +322,6 @@ def load_ordered_ct_series_from_directory(dicom_dir):
         raise RuntimeError(f"No readable DICOM series found in {dicom_dir}.")
     ordered_datasets = [pydicom.dcmread(file) for file in dicom_files]
     return ordered_datasets
-
 
     def plot_ct_with_contours(ds, contours, img_dir, txt_dir):
         img = ds.pixel_array.astype(np.int16)
@@ -389,14 +385,10 @@ def process_each_rs_separately(base_dir, report_path, output_dir="pointclouds_by
         print(f"Found {len(rs_paths)} RS files and {len(ct_paths)} CT files.")
 
         if rs_paths and ct_paths:
-            print(
-                f"Processing RS: {len(rs_paths)} files and {len(ct_paths)} CT files.")
-            rs_files_combined = "__".join(
-                [os.path.basename(path) for path in rs_paths])
-            rs_files_combined = rs_files_combined.replace(
-                ".dcm", "").replace(" ", "_")
-            rs_output_dir = os.path.join(
-                output_dir, rs_files_combined.replace(".dcm", "").replace(" ", "_"))
+            print(f"Processing RS: {len(rs_paths)} files and {len(ct_paths)} CT files.")
+            rs_files_combined = "__".join([os.path.basename(path) for path in rs_paths])
+            rs_files_combined = rs_files_combined.replace(".dcm", "").replace(" ", "_")
+            rs_output_dir = os.path.join(output_dir, rs_files_combined.replace(".dcm", "").replace(" ", "_"))
             os.makedirs(rs_output_dir, exist_ok=True)
             img_dir = os.path.join(rs_output_dir, "imgs")
             txt_dir = os.path.join(rs_output_dir, "txt")
@@ -404,8 +396,7 @@ def process_each_rs_separately(base_dir, report_path, output_dir="pointclouds_by
             os.makedirs(img_dir, exist_ok=True)
             os.makedirs(txt_dir, exist_ok=True)
 
-            ct_datasets = [pydicom.dcmread(path) for path in sorted(
-                ct_paths, key=lambda x: pydicom.dcmread(x).ImagePositionPatient[2])]
+            ct_datasets = [pydicom.dcmread(path) for path in sorted(ct_paths, key=lambda x: pydicom.dcmread(x).ImagePositionPatient[2])]
 
             contour_map = {}
             for rs_path in rs_paths:
@@ -419,21 +410,16 @@ def process_each_rs_separately(base_dir, report_path, output_dir="pointclouds_by
             for ds in ct_datasets:
                 sop_uid = ds.SOPInstanceUID
                 contours = contour_map.get(sop_uid, [])
-                plot_ct_with_contours(
-                    ds, contours, img_dir, txt_dir)
+                plot_ct_with_contours(ds, contours, img_dir, txt_dir)
 
             if point_cloud:
-                point_cloud = generate_volume_point_cloud(
-                    ct_datasets, mask=False)
+                point_cloud = generate_volume_point_cloud(ct_datasets, mask=False)
                 visualize_point_cloud(point_cloud, num_points=10000)
 
-                out_path = os.path.join(
-                    rs_output_dir, f"{rs_files_combined}_full_volume.npy")
+                out_path = os.path.join(rs_output_dir, f"{rs_files_combined}_full_volume.npy")
                 np.save(out_path, point_cloud)
-                point_cloud = generate_volume_point_cloud(
-                    ct_datasets, mask=True)
-                out_path = os.path.join(
-                    rs_output_dir, f"{rs_files_combined}_masked_volume.npy")
+                point_cloud = generate_volume_point_cloud(ct_datasets, mask=True)
+                out_path = os.path.join(rs_output_dir, f"{rs_files_combined}_masked_volume.npy")
                 np.save(out_path, point_cloud)
 
                 print(f"Saved point cloud: {out_path}")
@@ -453,11 +439,9 @@ def process_rt_ct_pairs(base_dir, cts, rs):
             elif file in cts:
                 ct_paths.append(os.path.join(base_dir, "CT", file))
     if rs_paths and ct_paths:
-        print(
-            f"Processing RS: {len(rs_paths)} files and {len(ct_paths)} CT files.")
+        print(f"Processing RS: {len(rs_paths)} files and {len(ct_paths)} CT files.")
 
-        ct_datasets = [pydicom.dcmread(path) for path in sorted(
-            ct_paths, key=lambda x: pydicom.dcmread(x).ImagePositionPatient[2])]
+        ct_datasets = [pydicom.dcmread(path) for path in sorted(ct_paths, key=lambda x: pydicom.dcmread(x).ImagePositionPatient[2])]
 
         contour_map = {}
         for rs_path in rs_paths:
@@ -469,8 +453,7 @@ def process_rt_ct_pairs(base_dir, cts, rs):
                     if roi_name not in contour_map:
                         contour_map[roi_name] = coords
                     else:
-                        contour_map[roi_name] = np.vstack(
-                            (contour_map[roi_name], coords))
+                        contour_map[roi_name] = np.vstack((contour_map[roi_name], coords))
         return contour_map
 
 

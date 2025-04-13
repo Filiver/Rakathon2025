@@ -4,16 +4,17 @@ import gc
 import os
 import base64
 import sys
-import random
-import time
+from PIL import Image
+import io
+import base64
 
 from flask import Flask
-from flask import render_template, jsonify
-from flask_socketio import SocketIO, emit
+from flask import render_template
+from flask_socketio import SocketIO
 
 from core import get_sample_reference_and_measurement, run_estimation_pipeline, pipeline_results_to_image_outputs
-from detect_intersects import detect_intersect, compare_contour_sets
-from compare_contours_in_slices import process_contours
+from detection.detect_intersects import detect_intersect, compare_contour_sets
+from contours.compare_contours_in_slices import process_contours
 
 
 HERE = Path(__file__).parent
@@ -252,10 +253,6 @@ def process_tensor_images(tensor_list, is_measurement=False, convert_to_data_uri
     Returns:
         list[dict]: List of dictionaries containing image data (as dataUri or tensor) and contours
     """
-    import torch
-    from PIL import Image
-    import io
-    import base64
 
     data_objects = []
 
@@ -514,5 +511,6 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description="Start the Visualizer server.")
     parser.add_argument("--sample", type=str, default="SAMPLE_001", help="Sample name to visualize")
+    parser.add_argument("--debug", action="store_true", help="Enable debug mode")
     args = parser.parse_args()
-    Visualizer.start(args.sample, debug=True)
+    Visualizer.start(args.sample, debug=args.debug)
