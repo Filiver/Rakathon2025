@@ -27,6 +27,8 @@ export class PlaybackControls {
       gap: "15px",
     });
 
+    this.isDragging = false; // Add state for dragging
+
     // **Cache listener functions**
     this.recordButtonClick = () => {
       if (this.animationController.isRecording) {
@@ -72,17 +74,47 @@ export class PlaybackControls {
       this.animationController.setSpeed(parseFloat(e.target.value));
     };
 
-    this.progressBarContainerClick = (event) => {
+    // ** Refactor progress bar interaction **
+    this.handleProgressBarInteraction = (event) => {
       const rect = this.progressBarContainer.getBoundingClientRect();
       const x = event.clientX - rect.left;
-      const progress = x / rect.width;
+      const progress = Math.max(0, Math.min(1, x / rect.width)); // Clamp progress between 0 and 1
       const targetTime = progress * this.animationController.getTotalTime();
-      if (event.altKey) {
+
+      if (event.type === "click" && event.altKey) {
+        // Pause only on Alt+Click
         this.animationController.pause();
         this.playButton.textContent = "Play";
       }
+      // Update frame immediately on click or drag
       this.animationController.goToTime(targetTime);
     };
+
+    this.progressBarMouseDown = (event) => {
+      this.isDragging = true;
+      this.progressBarContainer.style.cursor = "grabbing";
+      this.handleProgressBarInteraction(event); // Update on initial click
+      // Add temporary listeners to window for smoother dragging
+      window.addEventListener("mousemove", this.progressBarMouseMove);
+      window.addEventListener("mouseup", this.progressBarMouseUp);
+    };
+
+    this.progressBarMouseMove = (event) => {
+      if (this.isDragging) {
+        this.handleProgressBarInteraction(event);
+      }
+    };
+
+    this.progressBarMouseUp = () => {
+      if (this.isDragging) {
+        this.isDragging = false;
+        this.progressBarContainer.style.cursor = "pointer";
+        // Remove temporary listeners
+        window.removeEventListener("mousemove", this.progressBarMouseMove);
+        window.removeEventListener("mouseup", this.progressBarMouseUp);
+      }
+    };
+    // ** End Refactor **
 
     this.keydownListener = (event) => {
       if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey)
@@ -92,14 +124,24 @@ export class PlaybackControls {
           this.recordButton.click();
           break;
         case "ArrowRight":
-          this.stepForwardButtonClick();
+          // Directly call setFrame for stepping
+          this.animationController.pause();
+          this.animationController.setFrame(
+            this.animationController.currentFrame + 1
+          );
+          this.playButton.textContent = "Play";
           break;
         case "ArrowLeft":
-          this.stepBackButtonClick();
+          // Directly call setFrame for stepping
+          this.animationController.pause();
+          this.animationController.setFrame(
+            this.animationController.currentFrame - 1
+          );
+          this.playButton.textContent = "Play";
           break;
         case " ":
           this.playButton.click();
-          event.target.blur();
+          event.target.blur(); // Prevent space bar scrolling page
           break;
       }
     };
@@ -181,13 +223,19 @@ export class PlaybackControls {
     Object.assign(this.progressBar.style, {
       width: "0%",
       height: "100%",
-      backgroundColor: "#888",
+      backgroundColor: "#cc0000", // Changed from #888 (gray) to red
       borderRadius: "4px",
     });
     this.progressBarContainer.appendChild(this.progressBar);
+    // Replace single click listener with mousedown
     this.progressBarContainer.addEventListener(
-      "click",
-      this.progressBarContainerClick
+      "mousedown",
+      this.progressBarMouseDown
+    );
+    // Add mouseleave to cancel drag if mouse leaves the bar while pressed
+    this.progressBarContainer.addEventListener(
+      "mouseleave",
+      this.progressBarMouseUp
     );
 
     // Assemble controls row
@@ -257,10 +305,19 @@ export class PlaybackControls {
       this.stepForwardButtonClick
     );
     this.speedSelect.removeEventListener("change", this.speedSelectChange);
+    // Remove old progress bar listener and add new ones
     this.progressBarContainer.removeEventListener(
-      "click",
-      this.progressBarContainerClick
+      "mousedown",
+      this.progressBarMouseDown
     );
+    this.progressBarContainer.removeEventListener(
+      "mouseleave",
+      this.progressBarMouseUp
+    );
+    // Ensure window listeners are removed if dispose is called during a drag
+    window.removeEventListener("mousemove", this.progressBarMouseMove);
+    window.removeEventListener("mouseup", this.progressBarMouseUp);
+
     document.removeEventListener("keydown", this.keydownListener);
   }
 

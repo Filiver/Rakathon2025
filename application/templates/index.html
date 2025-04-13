@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
   <head>
-    <title>AldaSim</title>
+    <title>RadioProtect☢</title>
     <meta charset="utf-8" />
     <meta
       name="viewport"
@@ -27,16 +27,82 @@
     </style>
   </head>
   <body>
-    <div id="container"></div>
+    <div id="loading-splash">Loading...</div>
 
-    <!-- Add loading splash screen -->
-    <div id="loading-splash">
-      <h1>Loading...</h1>
+    <div
+      id="main-container"
+      style="
+        display: flex;
+        flex-direction: column;
+        width: 100%;
+        height: 100vh;
+        box-sizing: border-box;
+        padding: 10px;
+        gap: 10px;
+      "
+    >
+      <div
+        id="top-panel-container"
+        style="
+          display: flex;
+          width: 100%;
+          justify-content: space-between;
+          align-items: center;
+          gap: 8px; /* Reduced gap from 15px */
+          margin-bottom: 5px; /* Reduced margin from 10px */
+        "
+      >
+        <div
+          id="left-panel-container"
+          style="
+            flex: 0 0 auto;
+            display: flex;
+            flex-direction: column;
+            gap: 5px; /* Reduced gap from 10px */
+          "
+        >
+          <!-- MeasurementSelector will be added here by JS -->
+        </div>
+        <div
+          id="contour-panel-container"
+          style="flex: 1; display: flex; flex-direction: column; gap: 5px" /* Reduced gap from 10px */
+        >
+          <!-- ContourAdjustmentPanel will be added here by JS -->
+        </div>
+      </div>
+      <div
+        id="content-container"
+        style="
+          flex: 1;
+          display: flex;
+          flex-direction: row;
+          width: 100%;
+          height: 100%; /* Ensure full height */
+          gap: 10px;
+          align-items: center; /* Center content vertically */
+          justify-content: center;
+        "
+      >
+        <div
+          id="image-panel-container"
+          style="
+          margin-top: -30px;
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100%; /* Take full height */
+          "
+        >
+          <!-- ImagePanel content will be added here by JS -->
+        </div>
+      </div>
     </div>
 
-    <!-- Add Socket.IO client before other scripts -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+    <!-- Playback controls are added absolutely by JS -->
 
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
     <script src="{{ url_for('static', filename='lib/CCapture.js') }}"></script>
     <script src="{{ url_for('static', filename='lib/webm-writer-0.2.0.js') }}"></script>
     <script src="{{ url_for('static', filename='lib/gif.js') }}"></script>

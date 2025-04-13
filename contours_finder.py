@@ -63,7 +63,7 @@ def find_contours_in_meas(scan_ref, scan_meas, contours_xyz):
                        dtype=torch.float32, requires_grad=True)
     theta = torch.nn.Parameter(theta)
 
-    optimizer = optim.AdamW([theta], lr=0.01)
+    optimizer = optim.AdamW([theta], lr=0.001)
     criterion = torch.nn.MSELoss()
 
     # Make sure input is 5D: [B, C, D, H, W]
@@ -80,7 +80,7 @@ def find_contours_in_meas(scan_ref, scan_meas, contours_xyz):
     D, H, W = scan_meas.shape[2:]
 
     # Size for normalization: [W-1, H-1, D-1] to map 0..shape-1 to -1..1
-    # Construct directly to avoid potential slicing issues
+    # Construct directly to avoid potential slicing issues!
     norm_factors = torch.tensor(
         [W - 1, H - 1, D - 1], device=theta.device, dtype=torch.float32)
 
@@ -91,6 +91,7 @@ def find_contours_in_meas(scan_ref, scan_meas, contours_xyz):
     contours_xyz_float = torch.tensor(contours_xyz).float()
     # contours_xyz_float = contours_xyz.float()
     # --- End Changes ---
+    previous_loss = float('inf')
 
     for i in range(100):  # Or increased iterations
         optimizer.zero_grad()
@@ -153,14 +154,30 @@ def find_contours_in_meas(scan_ref, scan_meas, contours_xyz):
         if i % 10 == 0:
             print(f"Step {i}: loss = {loss.item():.6f}")
 
-    # Calculate final transformed contours outside the loop
+        if abs(previous_loss - loss.item()) < 1e-5:
+            print(f"Converged at step {i}")
+            break
+        else:
+            previous_loss = loss.item()
+            # Calculate final transformed contours outside the loop
     with torch.no_grad():  # No need for gradients here
         transformed_contours = torch.bmm(
             contours_xyz_float.unsqueeze(0), theta[:, :, :3].transpose(1, 2))
         transformed_contours = transformed_contours.squeeze(0)
         transformed_contours = transformed_contours + theta[:, :, 3].squeeze(0)
 
+    print(transformed_contours)
     return transformed_contours  # Return float coordinates
+
+
+def find_contours_in_meas_my(scan_ref, scan_meas, contours_xyz):
+    translation = torch.rand(3, device=scan_ref.device,
+                             dtype=torch.float32, requires_grad=True)
+    rotation = torch.rand(3, device=scan_ref.device,
+                          dtype=torch.float32, requires_grad=True)
+    scale = torch.rand(3, device=scan_ref.device,
+                       dtype=torch.float32, requires_grad=True)
+
 
 def find_all_contours_in_meas(scan_ref, scan_meas, contours_dict):
     transformed_contours_dict = {}

@@ -26,6 +26,10 @@ export class AnimationController {
     this.setFrame = this.setFrame.bind(this);
     this.goToTime = this.goToTime.bind(this); // Bind goToTime
     this.setSpeed = this.setSpeed.bind(this); // Bind setSpeed
+
+    this.isRecording = false; // Added recording state
+    this.recordingFormat = "jpg"; // Default recording format
+    this.capturedFrames = []; // To store captured frames during recording
   }
 
   play() {
@@ -128,5 +132,99 @@ export class AnimationController {
 
   dispose() {
     this.pause(); // Ensure animation loop is stopped
+  }
+
+  /**
+   * Start recording frames for export
+   */
+  startRecording() {
+    if (this.isRecording) return; // Prevent starting recording if already recording
+
+    console.log("Starting recording");
+    this.isRecording = true;
+    this.capturedFrames = []; // Reset captured frames
+
+    // If not playing, capture the current frame immediately
+    if (!this.isPlaying) {
+      this.captureCurrentFrame();
+    }
+    // If playing, frames will be captured during the animation loop
+  }
+
+  /**
+   * Stop recording and prepare data for export
+   */
+  stopRecording() {
+    if (!this.isRecording) return; // Prevent stopping if not recording
+
+    console.log(
+      `Stopping recording. Captured ${this.capturedFrames.length} frames.`
+    );
+    this.isRecording = false;
+
+    // If frames were captured, trigger download
+    if (this.capturedFrames.length > 0) {
+      this.exportRecording();
+    }
+  }
+
+  /**
+   * Capture the current frame for recording
+   */
+  captureCurrentFrame() {
+    if (!this.isRecording) return;
+
+    // Get the canvas or element to capture
+    // This implementation depends on how your view is structured
+    // For example, if the view has a method to get the current frame as an image:
+    const frameData = this.getCurrentFrameData();
+    if (frameData) {
+      this.capturedFrames.push(frameData);
+      console.log(
+        `Captured frame ${this.currentFrame}. Total: ${this.capturedFrames.length}`
+      );
+    }
+  }
+
+  /**
+   * Get current frame data for recording
+   * This should be customized based on what you want to capture
+   */
+  getCurrentFrameData() {
+    // Example implementation - customize this based on your actual view structure
+    // This might involve creating a canvas with the current view state, or
+    // getting the data from existing canvases or image elements
+
+    // For demonstration, we'll just save the current frame index
+    // In a real implementation, you'd get the actual image data
+    return {
+      frameIndex: this.currentFrame,
+      timestamp: Date.now(),
+    };
+  }
+
+  /**
+   * Export the recorded frames
+   */
+  exportRecording() {
+    // This is a placeholder for the actual export logic
+    // In a real implementation, you'd generate files based on this.recordingFormat
+    console.log(
+      `Exporting ${this.capturedFrames.length} frames in ${this.recordingFormat} format`
+    );
+
+    // Example: You might use a library like FileSaver.js to download the files
+    // or create a ZIP archive with JSZip
+
+    // Reset captured frames after export
+    this.capturedFrames = [];
+  }
+
+  /**
+   * Set the recording format (jpg, png, etc.)
+   */
+  setRecordingFormat(format) {
+    this.recordingFormat = format;
+    console.log(`Recording format set to: ${format}`);
   }
 }
