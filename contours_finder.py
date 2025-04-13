@@ -371,7 +371,9 @@ def find_all_contours_in_meas(scan_ref, scan_meas, spacing, origin, contours_dic
         'original_metric': {},
         'transformed_metric': {},
         'original_image': {},
-        'transformed_image': {}
+        'transformed_image': {},
+        'binned_z_transform': {},
+        'binned_z_original': {}
     }
 
     # Ensure spacing and origin are tensors on the correct device
@@ -406,12 +408,22 @@ def find_all_contours_in_meas(scan_ref, scan_meas, spacing, origin, contours_dic
             transformed_contours_xyz_metric, origin_zyx, spacing_zyx)
         results['transformed_image'][roi_name] = transformed_contours_dhw_image
 
+
+        binned_z_transform = bin_metric_coords_by_z_slice(
+            transformed_contours_xyz_metric, origin_zyx, spacing_zyx)
+        binned_z_original = bin_metric_coords_by_z_slice(
+            contours_xyz_metric_orig, origin_zyx, spacing_zyx)
+        
+        results['binned_z_transform'][roi_name] = binned_z_transform
+        results['binned_z_original'][roi_name] = binned_z_original
+
         print(f"Finished ROI: {roi_name}")
         print(f"  Original metric sample: {results['original_metric'][roi_name][0]}")
         print(f"  Transformed metric sample: {results['transformed_metric'][roi_name][0]}")
         print(f"  Original image sample: {results['original_image'][roi_name][0]}")
         print(f"  Transformed image sample: {results['transformed_image'][roi_name][0]}")
-
+        print(f"  Binned transformed metric sample: {results['binned_z_transform'][roi_name]}")
+        print(f"  Binned original metric sample: {results['binned_z_original'][roi_name]}")
 
     return results
 
@@ -479,33 +491,119 @@ def bin_metric_coords_by_z_slice(metric_coords_xyz, origin_zyx, spacing_zyx):
     return final_binned_data
 
 
+def binned_metric_xy_to_image_hw(binned_xy_metric, origin_zyx, spacing_zyx):
+    """
+    Converts binned metric (x, y) coordinates to binned image (h, w) coordinates.
+
+    Args:
+        binned_xy_metric (dict): Dictionary where keys are integer slice indices (d)
+                                 and values are torch.Tensors of shape (M, 2)
+                                 containing metric (x, y) coordinates.
+                                 (Output format of bin_metric_coords_by_z_slice).
+        origin_zyx (tuple or list or torch.Tensor): Scan origin (oz, oy, ox).
+        spacing_zyx (tuple or list or torch.Tensor): Voxel spacing (sz, sy, sx).
+
+    Returns:
+        dict: A dictionary where keys are integer slice indices (d) and values are
+              torch.Tensors of shape (M, 2) containing the corresponding
+              image (h, w) coordinates for that slice.
+    """
+    if not isinstance(binned_xy_metric, dict):
+        raise TypeError("binned_xy_metric must be a dictionary.")
+
+    # Ensure origin and spacing are tensors on the correct device
+    # Use the device of the first tensor found in the dict, or default to CPU
+    device = 'cpu'
+    if binned_xy_metric:
+        first_val = next(iter(binned_xy_metric.values()))
+        if isinstance(first_val, torch.Tensor):
+            device = first_val.device
+
+    if not isinstance(origin_zyx, torch.Tensor):
+        origin_zyx = torch.as_tensor(origin_zyx, dtype=torch.float32, device=device)
+    if not isinstance(spacing_zyx, torch.Tensor):
+        spacing_zyx = torch.as_tensor(spacing_zyx, dtype=torch.float32, device=device)
+
+    if origin_zyx.shape != (3,) or spacing_zyx.shape != (3,):
+        raise ValueError("origin_zyx and spacing_zyx must have shape (3,)")
+
+    # Extract relevant components (y, x order for h, w calculation)
+    origin_yx = origin_zyx[1:]  # Shape (2,) -> (oy, ox)
+    spacing_yx = spacing_zyx[1:] # Shape (2,) -> (sy, sx)
+
+    if torch.any(spacing_yx <= 0):
+        print(f"Warning: spacing_yx has non-positive values: {spacing_yx}")
+        # Optionally raise error or clamp spacing:
+        # spacing_yx = torch.clamp(spacing_yx, min=1e-6)
+        # raise ValueError("Y/X spacing must be positive.")
+        safe_spacing_yx = torch.where(spacing_yx == 0, torch.tensor(1e-6, device=spacing_yx.device), spacing_yx)
+    else:
+        safe_spacing_yx = spacing_yx
+
+
+    binned_hw_image = {}
+    for slice_idx, metric_xy in binned_xy_metric.items():
+        if not isinstance(metric_xy, torch.Tensor):
+            print(f"Warning: Skipping slice {slice_idx} - value is not a tensor.")
+            continue
+        if metric_xy.numel() == 0:
+            # Keep empty slices if they exist
+            binned_hw_image[slice_idx] = torch.empty((0, 2), dtype=torch.float32, device=device)
+            continue
+        if metric_xy.dim() != 2 or metric_xy.shape[1] != 2:
+            print(f"Warning: Skipping slice {slice_idx} - tensor shape {metric_xy.shape} is not (M, 2).")
+            continue
+
+        # metric_xy has shape (M, 2) with columns (x, y)
+        # We want to calculate:
+        # image_h = (metric_y - origin_y) / spacing_y
+        # image_w = (metric_x - origin_x) / spacing_x
+
+        # Extract metric y and x
+        metric_y = metric_xy[:, 1] # Shape (M,)
+        metric_x = metric_xy[:, 0] # Shape (M,)
+
+        # Extract origin and spacing y and x
+        origin_y = origin_yx[0] # Scalar
+        origin_x = origin_yx[1] # Scalar
+        spacing_y = safe_spacing_yx[0] # Scalar
+        spacing_x = safe_spacing_yx[1] # Scalar
+
+        # Calculate image h and w
+        image_h = (metric_y - origin_y) / spacing_y
+        image_w = (metric_x - origin_x) / spacing_x
+
+        # Stack them into (M, 2) tensor with columns (h, w)
+        image_hw = torch.stack((image_h, image_w), dim=1)
+
+        binned_hw_image[slice_idx] = image_hw
+
+    return binned_hw_image
+
+
 # --- Example of how to use the new function ---
 # if __name__ == '__main__':
-    # ... (previous example code for loading data) ...
+    # ... (previous example code for loading data and getting 'binned_data') ...
 
-    # Assuming 'all_contours_results' dictionary exists from find_all_contours_in_meas
-    # Let's bin the transformed metric coordinates for the first ROI found
+    # Assuming 'binned_data' dictionary exists from bin_metric_coords_by_z_slice
+    # and 'origin_tensor', 'spacing_tensor' are defined
 
-    # if all_contours_results['transformed_metric']:
-    #     first_roi_name = list(all_contours_results['transformed_metric'].keys())[0]
-    #     transformed_metric_coords = all_contours_results['transformed_metric'][first_roi_name]
-
-    #     # Ensure origin and spacing are tensors for the binning function
-    #     origin_tensor = torch.as_tensor(origin, dtype=torch.float32) # Use the origin loaded earlier
-    #     spacing_tensor = torch.as_tensor(spacing, dtype=torch.float32) # Use the spacing loaded earlier
-
-    #     print(f"\nBinning metric coordinates for ROI: {first_roi_name}")
-    #     binned_data = bin_metric_coords_by_z_slice(
-    #         transformed_metric_coords,
-    #         origin_tensor,
-    #         spacing_tensor
+    # if 'binned_data' in locals() and binned_data:
+    #     print(f"\nConverting binned metric (x, y) to image (h, w)...")
+    #     binned_image_hw_data = binned_metric_xy_to_image_hw(
+    #         binned_data,
+    #         origin_tensor, # Should be (oz, oy, ox)
+    #         spacing_tensor # Should be (sz, sy, sx)
     #     )
 
-    #     print(f"Number of slices with contours: {len(binned_data)}")
+    #     print(f"Number of slices with image coords: {len(binned_image_hw_data)}")
     #     # Print info for a few slices
-    #     for i, (slice_idx, xy_coords) in enumerate(binned_data.items()):
+    #     for i, (slice_idx, hw_coords) in enumerate(binned_image_hw_data.items()):
     #         if i >= 5: break # Limit output
-    #         print(f"  Slice {slice_idx}: Found {xy_coords.shape[0]} points. Sample (x, y): {xy_coords[0].tolist()}")
+    #         if hw_coords.numel() > 0:
+    #             print(f"  Slice {slice_idx}: Found {hw_coords.shape[0]} points. Sample (h, w): {hw_coords[0].tolist()}")
+    #         else:
+    #             print(f"  Slice {slice_idx}: Found 0 points.")
 
     # else:
-    #     print("No transformed metric contours found to bin.")
+    #      print("No binned metric data found to convert.")
