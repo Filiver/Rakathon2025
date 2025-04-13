@@ -5,6 +5,8 @@ const COLORS = {
   PTV: "#32CD32", // Lime Green
   SPINAL_CORD: "#1E90FF", // Dodger Blue
   PAROTID: "#9370DB", // Medium Purple
+  SUBMANDIBULAR: "#FF69B4", // Hot Pink
+  ESOPHAGUS: "#CD853F", // Peru (brownish)
 };
 
 export class ContourAdjustmentPanel {
@@ -56,8 +58,10 @@ export class ContourAdjustmentPanel {
     this.createCheckbox("gtv", "GTV", COLORS.GTV);
     this.createCheckbox("ctv", "CTV", COLORS.CTV);
     this.createCheckbox("ptv", "PTV", COLORS.PTV);
-    this.createCheckbox("spinal_cord", "SPINAL CORD", COLORS.SPINAL_CORD); // Full name
+    this.createCheckbox("spinal_cord", "SPINCORD", COLORS.SPINAL_CORD); // Full name
     this.createCheckbox("parotid", "PAROTID", COLORS.PAROTID); // Full name
+    this.createCheckbox("submandibular", "SUBMAND", COLORS.SUBMANDIBULAR); // Abbreviated with constraint
+    this.createCheckbox("esophagus", "ESOPH", COLORS.ESOPHAGUS); // Abbreviated with constraint
 
     // Add a divider
     const divider = document.createElement("div");
@@ -67,8 +71,8 @@ export class ContourAdjustmentPanel {
     this.container.appendChild(divider);
 
     // Add projection controls with clearer labels
-    this.createProjectionCheckbox("ref_on_meas", "R → M", "#FFFFFF");
-    this.createProjectionCheckbox("meas_on_ref", "M → R", "#FFFFFF");
+    this.createProjectionCheckbox("ref_on_meas", "R→M", "#FFFFFF");
+    this.createProjectionCheckbox("meas_on_ref", "M→R", "#FFFFFF");
 
     // REMOVED: Cross-projection settings section that was causing errors
 

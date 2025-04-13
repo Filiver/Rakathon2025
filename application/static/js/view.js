@@ -17,7 +17,8 @@ export class View {
     this.measurementSelector = null; // Add measurement selector property
     this.statusPanel = null; // Add status panel property
     this.isInitialized = false;
-    this.statusUpdateInterval = null; // For periodic status updates
+    this.statusUpdateInterval = null; // We'll remove this but keep the property for now
+    this.isSocketInitialized = false; // Add flag to track if socket was already initialized
   }
 
   static run() {
@@ -32,14 +33,24 @@ export class View {
    * Handles the 'images_data' event from the server.
    * Stores the data, initializes controllers, and updates the ImagePanel.
    * Removes the loading splash screen on first successful data load.
-   * @param {object} imagesData - Object containing 'references' and 'measurements' arrays of data URIs.
+   * @param {object} data - Object containing 'references', 'measurements', and status information.
    */
-  imagesDataHandler(imagesData) {
-    console.log("Received images data");
+  imagesDataHandler(data) {
+    console.log("Received images data with synchronized status");
 
-    // Mark the measurement selector as loaded
-    if (this.measurementSelector) {
-      this.measurementSelector.markAsLoaded();
+    // Extract image data and status from the combined message
+    const imagesData = {
+      references: data.references,
+      measurements: data.measurements,
+      roi_checks: data.roi_checks,
+    };
+
+    // Handle status update if included
+    if (data.status) {
+      console.log("Processing synchronized status update");
+      if (this.statusPanel) {
+        this.statusPanel.updateStatus(data.status);
+      }
     }
 
     // Re-enable the measurement selector if it was disabled
@@ -52,6 +63,7 @@ export class View {
       this.animationController.pause(); // Stop playback
       // Optionally reset frame to 0, or let the new setFrame handle it
     }
+
     // Dispose old playback controls if they exist, before creating new ones
     if (this.playbackControls) {
       this.playbackControls.dispose();
@@ -100,6 +112,14 @@ export class View {
           splash.remove();
           console.log("Initial data loaded, splash screen removed.");
         }
+
+        // Make the main container visible
+        const mainContainer = document.getElementById("main-container");
+        if (mainContainer) {
+          mainContainer.style.opacity = "1";
+          console.log("Main content revealed.");
+        }
+
         this.isInitialized = true; // Mark as initialized
       }
     } else {
@@ -151,13 +171,10 @@ export class View {
         );
       }
 
-      // Update the image panel with new frames
       this.imagePanel.update(
         this.imageSet.references[refIndex],
         this.imageSet.measurements[measIndex]
       );
-
-      // Remove InfoPanel update
 
       // If capturing, capture the newly displayed frame (after images are potentially loaded/rendered)
       // Use a small timeout to allow the browser to render the images before capture
@@ -173,6 +190,12 @@ export class View {
   }
 
   initializeSocket() {
+    // Prevent multiple initializations
+    if (this.isSocketInitialized) {
+      console.log("Socket already initialized, skipping");
+      return;
+    }
+
     const socket = io();
     this.socket = socket;
     socket.on("disconnect", () => console.log("Disconnected from server"));
@@ -205,21 +228,39 @@ export class View {
           filesData.references,
           filesData.measurements
         );
+
+        // Automatically select first reference and measurement if available
+        if (
+          !this.isInitialized &&
+          filesData.references.length > 0 &&
+          filesData.measurements.length > 0
+        ) {
+          console.log("Auto-selecting first reference and measurement");
+
+          // We don't need to call selectFirstOptions() - just use first values directly
+          // The UI will already have first items selected by default in populateOptions
+
+          // Request data for first reference and measurement
+          const firstRef = filesData.references[0];
+          const firstMeas = filesData.measurements[0];
+
+          console.log(
+            `Auto-requesting data for Ref: ${firstRef}, Meas: ${firstMeas}`
+          );
+          this.onDataRequested(); // Update UI to show loading state
+          socket.emit("get_images", {
+            reference: firstRef,
+            measurement: firstMeas,
+          });
+        }
       }
-      // No automatic 'get_images' request here - user must click confirm
+      // No automatic 'get_images' request here for subsequent loads - user must click confirm
     });
 
-    // Listen for the actual image data
-    // Bind the handler to 'this' context
+    // Listen for the combined image data and status update
     socket.on("images_data", this.imagesDataHandler.bind(this));
 
-    // Add status event listener
-    socket.on("status_update", (statusData) => {
-      console.log("Received status update");
-      if (this.statusPanel) {
-        this.statusPanel.updateStatus(statusData);
-      }
-    });
+    this.isSocketInitialized = true; // Mark socket as initialized
   }
 
   initFromAvailableFiles(availableFiles) {
@@ -258,6 +299,7 @@ export class View {
           points.length > 0 ? points[0] : "N/A"
         );
       });
+      this.measurementSelector.markAsLoaded();
     }
 
     console.log(
@@ -270,7 +312,7 @@ export class View {
   // Simplified initialization
   init() {
     // Set background to a calming blue-teal gradient
-    document.body.style.background = "rgba(0, 76, 255, 0.85)";
+    document.body.style.background = "rgba(255, 200, 127, 0.85)";
 
     // Create status panel before other UI components
     this.statusPanel = new StatusPanel("image-panel-container"); // Pass parent ID for status panel
@@ -288,103 +330,7 @@ export class View {
       "left-panel-container"
     ); // Pass socket and parent ID
 
-    // Set the view reference in the measurement selector
-    this.measurementSelector.setView(this);
-
-    // Start periodic status updates
-    this.startStatusUpdates();
-
-    // Removed splash screen removal from here
     console.log("View initialized, waiting for available files...");
-  }
-
-  /**
-   * Creates a message to guide the user to select and load data
-   */
-  createInitialLoadingMessage() {
-    const existingSplash = document.getElementById("loading-splash");
-
-    // If there's already a splash screen, update its content
-    if (existingSplash) {
-      existingSplash.innerHTML = ""; // Clear existing content
-
-      const message = document.createElement("div");
-      message.innerHTML = `
-        <h2>Ready to Load Data</h2>
-        <p>Please select reference and measurement dates, then click "Load" to begin.</p>
-        <p>↑ Use the selection panel above ↑</p>
-      `;
-
-      Object.assign(message.style, {
-        color: "white",
-        textAlign: "center",
-        position: "absolute",
-        top: "50%",
-        left: "50%",
-        transform: "translate(-50%, -50%)",
-        fontFamily: "sans-serif",
-        backgroundColor: "rgba(0, 0, 0, 0.7)",
-        padding: "20px",
-        borderRadius: "8px",
-        zIndex: "2", // Lower z-index to avoid blocking UI controls
-      });
-
-      existingSplash.appendChild(message);
-    } else {
-      // Create a new message if no splash exists
-      const messageContainer = document.createElement("div");
-      messageContainer.id = "user-selection-prompt";
-
-      Object.assign(messageContainer.style, {
-        position: "absolute",
-        top: "50%",
-        left: "50%",
-        transform: "translate(-50%, -50%)",
-        backgroundColor: "rgba(0, 0, 0, 0.7)",
-        color: "white",
-        padding: "20px",
-        borderRadius: "8px",
-        textAlign: "center",
-        zIndex: "2", // Lower z-index to avoid blocking UI controls
-        fontFamily: "sans-serif",
-        pointerEvents: "none", // Allow clicks to pass through to elements below
-      });
-
-      messageContainer.innerHTML = `
-        <h2>Welcome to the Visualization Tool</h2>
-        <p>Please select reference and measurement dates, then click "Load" to begin.</p>
-        <p>↑ Use the selection panel above ↑</p>
-      `;
-
-      document
-        .getElementById("image-panel-container")
-        .appendChild(messageContainer);
-    }
-  }
-
-  /**
-   * Fetch the current system status from the server
-   */
-  fetchStatus() {
-    if (!this.socket) return;
-
-    this.socket.emit("get_status");
-  }
-
-  /**
-   * Start periodic status updates
-   */
-  startStatusUpdates() {
-    // Clear any existing interval first
-    if (this.statusUpdateInterval) {
-      clearInterval(this.statusUpdateInterval);
-    }
-
-    // Set up periodic status updates (every 5 seconds)
-    this.statusUpdateInterval = setInterval(() => this.fetchStatus(), 5000);
-
-    // Also fetch immediately
-    this.fetchStatus();
   }
 
   /**
@@ -392,9 +338,16 @@ export class View {
    * Updates the UI to show loading state
    */
   onDataRequested() {
-    // Show loading in status panel
+    // Show loading in status panel using the existing updateStatus method
     if (this.statusPanel) {
-      this.statusPanel.showDataLoading("Requesting image data...");
+      this.statusPanel.updateStatus({
+        message: "Requesting image data...",
+        severity: 0,
+        content: {
+          Status: "Fetching data from server",
+          Time: new Date().toLocaleTimeString(),
+        },
+      });
     }
 
     // Disable confirm button in measurement selector
@@ -403,9 +356,8 @@ export class View {
     }
   }
 
-  // Removed disposeOfAll and animate methods - Add proper disposal if needed
   dispose() {
-    // Stop status updates
+    // Remove status update interval cleanup since we no longer have it
     if (this.statusUpdateInterval) {
       clearInterval(this.statusUpdateInterval);
       this.statusUpdateInterval = null;
@@ -418,7 +370,6 @@ export class View {
     this.contourPanel?.dispose();
     this.measurementSelector?.dispose();
     this.animationController?.dispose();
-    // Remove InfoPanel disposal
 
     // Disconnect socket
     if (this.socket) {

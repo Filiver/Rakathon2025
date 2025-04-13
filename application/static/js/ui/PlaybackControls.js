@@ -14,7 +14,7 @@ export class PlaybackControls {
       flexDirection: "column",
       alignItems: "center",
       gap: "3px",
-      backgroundColor: "rgba(167, 184, 249, 0.85)", // Dark blue/navy color
+      backgroundColor: "rgba(242, 152, 34, 0.85)", // Dark blue/navy color
       padding: "8px 15px",
       borderRadius: "10px",
       boxShadow: "0 6px 16px rgba(0, 0, 0, 0.15), 0 2px 4px rgba(0, 0, 0, 0.1)",

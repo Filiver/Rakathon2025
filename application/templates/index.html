@@ -24,10 +24,114 @@
         width: 100%;
         text-align: center;
       }
+      
+      /* Splash screen styling */
+      #loading-splash {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0, 0, 0, 0.9);
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        z-index: 9999;
+        transition: opacity 0.5s ease;
+      }
+      
+      #splash-logo {
+        width: 200px;
+        height: 200px;
+        margin-bottom: 30px;
+        border-radius: 10px;
+        animation: pulse 2s infinite;
+      }
+      
+      #splash-title {
+        font-size: 36px;
+        font-weight: bold;
+        margin-bottom: 20px;
+        color: #e67e22;
+        text-shadow: 0 0 10px rgba(230, 126, 34, 0.5);
+      }
+      
+      #splash-message {
+        font-size: 18px;
+        margin-bottom: 30px;
+        color: #ecf0f1;
+      }
+      
+      #splash-controls {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        background-color: rgba(40, 40, 40, 0.7);
+        padding: 20px;
+        border-radius: 10px;
+        width: 80%;
+        max-width: 500px;
+      }
+      
+      #splash-status {
+        margin-top: 20px;
+        font-style: italic;
+        color: #bdc3c7;
+      }
+      
+      @keyframes pulse {
+        0% { transform: scale(1); }
+        50% { transform: scale(1.1); }
+        100% { transform: scale(1); }
+      }
+      
+      @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+      }
+      
+      .loading-spinner {
+        width: 40px;
+        height: 40px;
+        border: 4px solid rgba(230, 126, 34, 0.3);
+        border-radius: 50%;
+        border-top: 4px solid #e67e22;
+        animation: spin 1s linear infinite;
+        margin: 20px 0;
+      }
+      
+      /* Hide main container initially */
+      #main-container {
+        opacity: 0;
+        transition: opacity 0.5s ease;
+      }
+      
+      /* Initially hide elements that should appear after data is loaded */
+      .hidden-until-loaded {
+        display: none;
+      }
+
+      #splash-selector-container {
+        width: 100%;
+        margin: 15px 0;
+        min-height: 50px; /* Ensure container has height even when empty */
+      }
+      
+      /* Specific style for measurement selector when in splash screen */
+      #splash-selector-container #measurement-selector-block {
+        width: 100% !important;
+        max-width: 500px;
+        margin: 0 auto;
+      }
     </style>
   </head>
   <body>
-    <div id="loading-splash">Loading...</div>
+    <div id="loading-splash">
+      <img id="splash-logo" src="{{ url_for('static', filename='textures/logo.png') }}" alt="RadioProtect Logo" onerror="this.src='data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDAgMTAwIj48Y2lyY2xlIGN4PSI1MCIgY3k9IjUwIiByPSI0NSIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjZTY3ZTIyIiBzdHJva2Utd2lkdGg9IjMiLz48Y2lyY2xlIGN4PSI1MCIgY3k9IjUwIiByPSIyMCIgZmlsbD0iI2U2N2UyMiIvPjxjaXJjbGUgY3g9IjUwIiBjeT0iNTAiIHI9IjgiIGZpbGw9IiMzMzMiLz48cGF0aCBkPSJNODUgNTBIOTUiIHN0cm9rZT0iI2U2N2UyMiIgc3Ryb2tlLXdpZHRoPSIzIi8+PHBhdGggZD0iTTUgNTBIMTUiIHN0cm9rZT0iI2U2N2UyMiIgc3Ryb2tlLXdpZHRoPSIzIi8+PHBhdGggZD0iTTUwIDg1Vjk1IiBzdHJva2U9IiNlNjdlMjIiIHN0cm9rZS13aWR0aD0iMyIvPjxwYXRoIGQ9Ik01MCA1VjE1IiBzdHJva2U9IiNlNjdlMjIiIHN0cm9rZS13aWR0aD0iMyIvPjwvc3ZnPg=='; this.style.width='150px'; this.style.height='150px';">
+      <div id="splash-title">RadioProtect☢</div>
+      <div class="loading-spinner" id="splash-spinner" style="display: none;"></div>
+    </div>
 
     <div
       id="main-container"
@@ -39,6 +143,8 @@
         box-sizing: border-box;
         padding: 10px;
         gap: 10px;
+        opacity: 0;
+        transition: opacity 0.5s ease;
       "
     >
       <div
@@ -107,7 +213,6 @@
     <script src="{{ url_for('static', filename='lib/webm-writer-0.2.0.js') }}"></script>
     <script src="{{ url_for('static', filename='lib/gif.js') }}"></script>
     <script src="{{ url_for('static', filename='lib/tar.js') }}"></script>
-    <script src="{{ url_for('static', filename='lib/download.js') }}"></script>
     <script src="https://cdn.canvasjs.com/ga/canvasjs.min.js"></script>
 
     <script type="importmap">

@@ -38,7 +38,7 @@ export class MeasurementSelector {
 
     // --- Reference Selector ---
     const refLabel = document.createElement("label");
-    refLabel.textContent = "REFERENCE:"; // ALL CAPS label
+    refLabel.textContent = "REF:"; // ALL CAPS label
     this.container.appendChild(refLabel);
 
     this.referenceSelect = document.createElement("select");
@@ -48,7 +48,7 @@ export class MeasurementSelector {
 
     // --- Measurement Selector ---
     const measLabel = document.createElement("label");
-    measLabel.textContent = "MEASUREMENT:"; // ALL CAPS label
+    measLabel.textContent = "MEAS:"; // ALL CAPS label
     this.container.appendChild(measLabel);
 
     this.measurementSelect = document.createElement("select");
@@ -151,20 +151,8 @@ export class MeasurementSelector {
       "No measurements available"
     );
 
-    // --- Demo Mode Fix ---
-    // Automatically load the first available combination if both exist
-    if (firstRef && firstMeas) {
-      console.log(
-        `Demo mode: Automatically loading first combination - Ref: ${firstRef}, Meas: ${firstMeas}`
-      );
-      this.disableConfirmButton(); // Set button to loading state
-      this.requestImages(firstRef, firstMeas);
-    } else {
-      console.log(
-        "Demo mode: Not loading data automatically as reference or measurement dates are missing."
-      );
-    }
-    // --- End Demo Mode Fix ---
+    // Demo mode auto-loading has been removed
+    // User must now explicitly click the Load Data button
 
     // Reset state when new options are loaded
     this.isLoaded = false;
@@ -213,11 +201,30 @@ export class MeasurementSelector {
       // Disable button while loading
       this.disableConfirmButton();
 
+      // Notify view for UI updates (especially needed for splash screen)
+      if (this.view) {
+        this.view.onDataRequested();
+      } else {
+        // Fallback behavior if view isn't connected
+        const splashSpinner = document.getElementById("splash-spinner");
+        const splashStatus = document.getElementById("splash-status");
+        if (splashSpinner) splashSpinner.style.display = "block";
+        if (splashStatus)
+          splashStatus.textContent = "Loading data, please wait...";
+      }
+
       // Request the images
       this.requestImages(selectedReference, selectedMeasurement);
     } else {
       console.warn("Please select both a reference and a measurement date.");
-      // Optionally show a message to the user
+
+      // Show an error message in splash status if available
+      const splashStatus = document.getElementById("splash-status");
+      if (splashStatus) {
+        splashStatus.textContent =
+          "Please select both a reference and measurement dataset";
+        splashStatus.style.color = "#e74c3c";
+      }
     }
   }
 

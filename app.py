@@ -13,12 +13,24 @@ from flask_socketio import SocketIO, emit
 
 from core import get_sample_reference_and_measurement, run_estimation_pipeline, pipeline_results_to_image_outputs
 from detect_intersects import detect_intersect, compare_contour_sets
+from compare_contours_in_slices import process_contours
 
 
 HERE = Path(__file__).parent
 
 TEMPLATES = HERE / "application/templates"
 STATIC = HERE / "application/static"
+
+# ROI color definitions for use in mapping and visualization
+ROI_COLORS = {
+    "GTV": "#FF4500",  # Orange-Red
+    "CTV": "#FFD700",  # Gold
+    "PTV": "#32CD32",  # Lime Green
+    "SPINAL_CORD": "#1E90FF",  # Dodger Blue
+    "PAROTID": "#9370DB",  # Medium Purple
+    "SUBMANDIBULAR": "#FF69B4",  # Hot Pink
+    "ESOPHAGUS": "#CD853F",  # Peru (brownish)
+}
 
 # Define supported image extensions and their MIME types
 IMAGE_MIME_TYPES = {
@@ -182,6 +194,8 @@ def map_contour_name_to_js(roi_name):
         "ptv": "ptv",
         "spinal_cord": "spinal_cord",
         "parotid": "parotid",
+        "submandibular": "submandibular",
+        "esophagus": "esophagus",
         # Handle common variants
         "spinal": "spinal_cord",
         "cord": "spinal_cord",
@@ -190,6 +204,11 @@ def map_contour_name_to_js(roi_name):
         "parotid_right": "parotid",
         "left_parotid": "parotid",
         "right_parotid": "parotid",
+        "submandibular_gland": "submandibular",
+        "left_submandibular": "submandibular",
+        "right_submandibular": "submandibular",
+        "esophagus_upper": "esophagus",
+        "esophagus_lower": "esophagus",
     }
 
     # Check for exact matches in our mapping dictionary
@@ -207,6 +226,12 @@ def map_contour_name_to_js(roi_name):
 
     if "parotid" in name_lower:
         return "parotid"
+
+    if "submandibular" in name_lower:
+        return "submandibular"
+
+    if "esophagus" in name_lower:
+        return "esophagus"
 
     # If no mapping found, return the original name but ensure it's lowercase and uses
     # underscores instead of spaces or hyphens for JavaScript compatibility
@@ -387,6 +412,11 @@ class Visualizer:
         @self.socketio.on("get_available_files")
         def handle_get_available_files():
             try:
+                # Add a small delay to prevent rapid reconnection cycles
+                import time
+
+                time.sleep(0.2)  # 200ms delay
+
                 self.socketio.emit(
                     "available_files",
                     {
@@ -412,9 +442,8 @@ class Visualizer:
                 # Run the pipeline
                 alignment_results, contours_dict = run_estimation_pipeline(reference_dir, measurement_dir)
                 results = pipeline_results_to_image_outputs(alignment_results, contours_dict)
-                # intersections = detect_intersect(contours_dict)
-                # cover = compare_contour_sets(contours_dict, ["binned_z_transform"], contours_dict, ["binned_z_original"])
-
+                intersections = detect_intersect(contours_dict)
+                cover = compare_contour_sets(contours_dict["binned_z_transform"], contours_dict["binned_z_original"])
                 # Get tensors from your results
                 reference_tensors = [alignment_results["reference"][i] for i in range(alignment_results["reference"].shape[0])]
                 measurement_tensors = [alignment_results["measurement"][i] for i in range(alignment_results["measurement"].shape[0])]
@@ -441,42 +470,35 @@ class Visualizer:
                 measurement_data = process_tensor_images(measurement_tensors, is_measurement=True, contours_by_slice=contours_by_slice)
 
                 print(f"Processed {len(reference_data)} reference images and {len(measurement_data)} measurement images")
+                print(f"Intersections: {intersections}")
+                print(f"Cover: {cover}")
 
-                # Send the processed data to client
+                results, status, ok = process_contours(
+                    contours_dict["binned_z_transform"],
+                    contours_dict["binned_z_original"],
+                    alignment_results["origin"],
+                    alignment_results["spacing"],
+                )
+
+                # Send the processed data and status to client in a single message
                 self.socketio.emit(
                     "images_data",
                     {
                         "references": reference_data,
                         "measurements": measurement_data,
+                        "roi_checks": results.get("roi_checks", {}),
+                        "status": status,  # Include status in the same message
                     },
                 )
 
                 # Clean up to free memory
                 gc.collect()
-                print("Data sent successfully")
+                print("Data and status sent successfully")
 
             except Exception as e:
                 msg = f"Error processing data: {e}"
                 print(f"Error: {msg}", file=sys.stderr)
                 self.socketio.emit("error", {"message": msg})
-
-        @self.socketio.on("get_status")
-        def handle_status_request():
-            """Handle status request from client and emit status data"""
-
-            # In a real implementation, these would come from actual system measurements
-            status = {
-                "message": "System operational",
-                "severity": 0,
-                "content": {
-                    "Image Quality": "Good",
-                    "Dose": f"Within limits ({random.uniform(20, 25):.1f} Gy)",
-                    "Contour Accuracy": f"{random.uniform(95, 99):.1f}%",
-                    "Processing Time": f"{random.uniform(0.8, 1.5):.2f}s",
-                    "Last Check": time.strftime("%H:%M:%S"),
-                },
-            }
-            emit("status_update", status)
 
     def run(self, debug: bool = False, host: str = "0.0.0.0", port: int = 5420):
         self.socketio.run(self.app, debug=debug, host=host, port=port, log_output=True)

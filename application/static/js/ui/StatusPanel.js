@@ -79,7 +79,7 @@ export class StatusPanel {
       padding: "15px",
       backgroundColor: "rgba(45, 45, 45, 0.95)", // Dark background for content
       maxHeight: "0",
-      overflow: "hidden",
+      overflow: "hidden", // Start with hidden overflow
       transition: "max-height 0.3s ease",
       fontSize: "13px",
       color: "white",
@@ -99,9 +99,11 @@ export class StatusPanel {
       if (isOpen) {
         this.content.style.maxHeight = "300px"; // Fixed height for dropdown
         this.content.style.visibility = "visible";
+        this.content.style.overflow = "auto"; // Enable scrolling when open
         this.arrow.style.transform = "rotate(180deg)";
       } else {
         this.content.style.maxHeight = "0";
+        this.content.style.overflow = "hidden"; // Disable scrolling when closed
         setTimeout(() => {
           if (!isOpen) this.content.style.visibility = "hidden";
         }, 300); // Match transition duration
@@ -201,6 +203,14 @@ export class StatusPanel {
         color: "white",
       });
 
+      // Add scroll container for long content
+      const scrollContainer = document.createElement("div");
+      Object.assign(scrollContainer.style, {
+        width: "100%",
+        overflowY: "auto", // Enable vertical scrolling
+        maxHeight: "270px", // Slightly less than parent's maxHeight to account for padding
+      });
+
       // Add entries from content object
       Object.entries(content).forEach(([key, value]) => {
         const row = document.createElement("tr");
@@ -228,7 +238,9 @@ export class StatusPanel {
         table.appendChild(row);
       });
 
-      this.content.appendChild(table);
+      // Append table to scroll container, then container to content
+      scrollContainer.appendChild(table);
+      this.content.appendChild(scrollContainer);
     }
   }
 
