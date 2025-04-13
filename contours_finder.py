@@ -6,11 +6,16 @@ import torchvision.transforms as transforms
 import matplotlib.pyplot as plt
 import torchvision
 import torch.optim as optim
+from collections import defaultdict # Import defaultdict
 
 import os
 import numpy as np
 import torch
-
+import torch.nn.functional as F
+import torchvision.transforms as transforms
+import matplotlib.pyplot as plt
+import torchvision
+import torch.optim as optim
 
 import os
 import torch
@@ -228,7 +233,7 @@ def find_contours_in_meas_my(scan_ref, scan_meas, spacing, origin, contours_xyz_
     contours_xyz_normalized = ((contours_xyz_metric_b - origin_xyz_b) / norm_divisor_xyz_b) * 2.0 - 1.0
 
     # Flip last dim -> (z, y, x) order for grid_sample input grid
-    grid_normalized_zyx = contours_xyz_normalized.flip(-1) # Shape: [1, 1, 1, N, 3], order (z, y, x)
+    grid_normalized_zyx = contours_xyz_normalized.flip(-1) # Shape: [1, 1, 1, N, 3]
 
     # --- Optimization Setup ---
     # Initialize theta closer to identity
@@ -410,71 +415,97 @@ def find_all_contours_in_meas(scan_ref, scan_meas, spacing, origin, contours_dic
 
     return results
 
-# --- Example of how to use the updated function ---
-# Note: This requires load_contours_from_txt and actual scan/contour data
 
+def bin_metric_coords_by_z_slice(metric_coords_xyz, origin_zyx, spacing_zyx):
+    """
+    Converts only the Z coordinate from metric to image space (slice index)
+    and bins the metric (x, y) coordinates based on the calculated slice index.
+
+    Args:
+        metric_coords_xyz (torch.Tensor): Input points (N, 3) in metric coordinates (x, y, z).
+        origin_zyx (tuple or list or torch.Tensor): Scan origin in metric coordinates (oz, oy, ox).
+        spacing_zyx (tuple or list or torch.Tensor): Voxel spacing (sz, sy, sx).
+
+    Returns:
+        dict: A dictionary where keys are integer slice indices (d) and values are
+              torch.Tensors of shape (M, 2) containing the metric (x, y) coordinates
+              for points falling into that slice index.
+    """
+    if not isinstance(metric_coords_xyz, torch.Tensor):
+        metric_coords_xyz = torch.as_tensor(metric_coords_xyz, dtype=torch.float32)
+    if not isinstance(origin_zyx, torch.Tensor):
+        origin_zyx = torch.as_tensor(origin_zyx, dtype=torch.float32, device=metric_coords_xyz.device)
+    if not isinstance(spacing_zyx, torch.Tensor):
+        spacing_zyx = torch.as_tensor(spacing_zyx, dtype=torch.float32, device=metric_coords_xyz.device)
+
+    # Ensure inputs have correct shapes
+    if metric_coords_xyz.dim() != 2 or metric_coords_xyz.shape[1] != 3:
+        raise ValueError(f"metric_coords_xyz must have shape (N, 3), got {metric_coords_xyz.shape}")
+    if origin_zyx.shape != (3,) or spacing_zyx.shape != (3,):
+        raise ValueError("origin_zyx and spacing_zyx must have shape (3,)")
+
+    # Extract Z components (metric z, origin z, spacing z)
+    metric_z = metric_coords_xyz[:, 2] # Shape (N,)
+    origin_z = origin_zyx[0]          # Scalar
+    spacing_z = spacing_zyx[0]        # Scalar
+
+    if spacing_z <= 0:
+        raise ValueError("Z spacing must be positive.")
+
+    # Calculate image z-coordinate (slice index 'd')
+    # image_coord_z = (metric_coord_z - origin_z) / spacing_z
+    image_coords_z = (metric_z - origin_z) / spacing_z
+
+    # Round to nearest integer slice index
+    slice_indices = torch.round(image_coords_z).long() # Shape (N,)
+
+    # Use defaultdict to automatically handle new slice indices
+    binned_xy_metric = defaultdict(list)
+
+    # Iterate through points and bin metric (x, y) by slice index
+    for i in range(metric_coords_xyz.shape[0]):
+        slice_idx = slice_indices[i].item() # Get integer index
+        metric_xy = metric_coords_xyz[i, :2] # Get metric (x, y) as Tensor shape (2,)
+        binned_xy_metric[slice_idx].append(metric_xy)
+
+    # Convert lists of tensors to single tensors
+    final_binned_data = {}
+    for slice_idx, xy_list in binned_xy_metric.items():
+        if xy_list: # Ensure list is not empty
+            final_binned_data[slice_idx] = torch.stack(xy_list, dim=0) # Stack to (M, 2) tensor
+        # else: # Optionally keep empty slices
+            # final_binned_data[slice_idx] = torch.empty((0, 2), dtype=metric_coords_xyz.dtype, device=metric_coords_xyz.device)
+
+    return final_binned_data
+
+
+# --- Example of how to use the new function ---
 # if __name__ == '__main__':
-#     # 1. Load contours
-#     contour_dir = 'path/to/your/contour/textfiles' # <<< CHANGE THIS
-#     try:
-#         _, tensor_contours_dict = load_contours_from_txt(contour_dir) # Dict: roi_name -> tensor (N, 3) (x, y, z)
-#         if not tensor_contours_dict:
-#              raise ValueError(f"No contours loaded from {contour_dir}")
-#     except Exception as e:
-#         print(f"Error loading contours: {e}. Exiting.")
-#         exit()
+    # ... (previous example code for loading data) ...
 
-#     # 2. Load scans and metadata (replace with your actual loading logic)
-#     try:
-#         # scan_ref = load_my_scan_data('path/to/reference_scan') # Shape (D, H, W)
-#         # scan_meas = load_my_scan_data('path/to/measurement_scan') # Shape (D, H, W)
-#         # spacing = load_my_spacing('path/to/reference_scan') # Tuple/List (sz, sy, sx)
-#         # origin = load_my_origin('path/to/reference_scan') # Tuple/List (oz, oy, ox)
+    # Assuming 'all_contours_results' dictionary exists from find_all_contours_in_meas
+    # Let's bin the transformed metric coordinates for the first ROI found
 
-#         # Dummy data for demonstration:
-#         D, H, W = 64, 128, 128
-#         print(f"Using dummy scan data of shape ({D}, {H}, {W})")
-#         scan_ref = torch.rand(D, H, W) * 100 # Reference
-#         # Create a slightly shifted/scaled measurement scan for testing
-#         grid_shift = torch.tensor([[[0.05, 0, 0, -5], # Shift x slightly
-#                                     [0, 1.0, 0, 0], # Keep y
-#                                     [0, 0, 1.0, 0]]], dtype=torch.float32) # Keep z
-#         grid = F.affine_grid(grid_shift, (1, 1, D, H, W), align_corners=True)
-#         scan_meas = F.grid_sample(scan_ref.view(1, 1, D, H, W), grid, align_corners=True).squeeze()
+    # if all_contours_results['transformed_metric']:
+    #     first_roi_name = list(all_contours_results['transformed_metric'].keys())[0]
+    #     transformed_metric_coords = all_contours_results['transformed_metric'][first_roi_name]
 
-#         spacing = (3.0, 1.5, 1.5) # Example spacing (z, y, x)
-#         origin = (-90.0, -150.0, -150.0) # Example origin (z, y, x)
+    #     # Ensure origin and spacing are tensors for the binning function
+    #     origin_tensor = torch.as_tensor(origin, dtype=torch.float32) # Use the origin loaded earlier
+    #     spacing_tensor = torch.as_tensor(spacing, dtype=torch.float32) # Use the spacing loaded earlier
 
-#     except Exception as e:
-#         print(f"Error loading scan data/metadata: {e}. Exiting.")
-#         exit()
+    #     print(f"\nBinning metric coordinates for ROI: {first_roi_name}")
+    #     binned_data = bin_metric_coords_by_z_slice(
+    #         transformed_metric_coords,
+    #         origin_tensor,
+    #         spacing_tensor
+    #     )
 
-#     # 3. Set device
-#     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-#     print(f"Using device: {device}")
-#     scan_ref = scan_ref.to(device)
-#     scan_meas = scan_meas.to(device)
-#     # Ensure contours in the dict are moved to device within the main function
+    #     print(f"Number of slices with contours: {len(binned_data)}")
+    #     # Print info for a few slices
+    #     for i, (slice_idx, xy_coords) in enumerate(binned_data.items()):
+    #         if i >= 5: break # Limit output
+    #         print(f"  Slice {slice_idx}: Found {xy_coords.shape[0]} points. Sample (x, y): {xy_coords[0].tolist()}")
 
-#     # 4. Run alignment for all contours
-#     print(f"\nAligning all contours...")
-#     all_contours_results = find_all_contours_in_meas(
-#         scan_ref,
-#         scan_meas,
-#         spacing,
-#         origin,
-#         tensor_contours_dict # Pass the whole dictionary
-#     )
-
-#     print("\n--- Results Summary ---")
-#     for roi_name in all_contours_results['original_metric']:
-#         print(f"ROI: {roi_name}")
-#         print(f"  Num points: {all_contours_results['original_metric'][roi_name].shape[0]}")
-#         # Access results like:
-#         # original_metric_coords = all_contours_results['original_metric'][roi_name]
-#         # transformed_image_coords = all_contours_results['transformed_image'][roi_name]
-#         # print(f"  Transformed Image Coords Sample:\n{transformed_image_coords[:3]}")
-
-#     # You can now use the 'all_contours_results' dictionary which contains
-#     # 'original_metric', 'transformed_metric', 'original_image', 'transformed_image'
-#     # each being a dictionary mapping roi_name to the corresponding tensor.
+    # else:
+    #     print("No transformed metric contours found to bin.")

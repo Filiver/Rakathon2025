@@ -77,3 +77,9 @@ visualize_all_contours_from_dict2(
     contours_meas_torch_dict,alignment_results["measurement"],
     np.array(alignment_results["spacing"]),
     np.array(alignment_results["origin"]))
+
+import pickle
+with open("rand2.pkl", "wb") as f:
+    pickle.dump(contours_meas_torch_dict, f)
+
+
