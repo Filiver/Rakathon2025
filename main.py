@@ -3,7 +3,7 @@ from pointcloud_alignment.fourier import align_measurement_to_reference_scan, di
 from contours_finder import find_all_contours_in_meas
 from itk import process_rt_ct_pairs
 from pathlib import Path
-from visualize_conturs import visualize_all_contours_from_dict, visualize_two_contour_dicts
+from visualize_conturs import visualize_all_contours_from_dict, visualize_two_contour_dicts,visualize_all_contours_from_dict2
 import numpy as np
 HERE = Path(__file__).parent
 # --- Configuration ---
@@ -56,7 +56,7 @@ print(contours_dict_ref.keys())
 a = contours_dict_ref[list(contours_dict_ref.keys())[0]]
 print(a)
 print(a.shape)
-contours_meas_torch_dict = find_all_contours_in_meas(
+contours_meas_torch_dict= find_all_contours_in_meas(
     alignment_results["reference"],
     alignment_results["measurement"],
     alignment_results["spacing"],
@@ -65,11 +65,15 @@ contours_meas_torch_dict = find_all_contours_in_meas(
 )
 print("Origin:", alignment_results["origin"])
 print("Spacing:", alignment_results["spacing"])
-visualize_all_contours_from_dict(contours_meas_torch_dict, np.array(
+visualize_all_contours_from_dict(contours_meas_torch_dict["transformed_metric"],np.array(
     alignment_results["spacing"]),
     np.array(alignment_results["origin"]))
 visualize_two_contour_dicts(
-    contours_dict_ref, contours_meas_torch_dict,
+    contours_dict_ref, contours_meas_torch_dict["transformed_metric"],
     np.array(alignment_results["spacing"]),
     np.array(alignment_results["origin"])
 )
+visualize_all_contours_from_dict2(
+    contours_meas_torch_dict,alignment_results["measurement"],
+    np.array(alignment_results["spacing"]),
+    np.array(alignment_results["origin"]))
