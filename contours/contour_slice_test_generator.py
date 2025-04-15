@@ -1,9 +1,18 @@
 import numpy as np
 
-# contour_generator.py
-import numpy as np
-
-def generate_ellipse_points(a, b, num_points=100, center=(0, 0), noise=0.0, z=0):
+def generate_ellipse_points(a, b, num_points=100, center=(0, 0), noise=0.0, z=0) -> np.ndarray:
+    """
+    Generate points on an ellipse in 3D space.
+    parameters:
+        a (float): Semi-major axis length.
+        b (float): Semi-minor axis length.
+        num_points (int): Number of points to generate.
+        center (tuple): Center of the ellipse in 2D space (x, y).
+        noise (float): Standard deviation of Gaussian noise to add to points.
+        z (float): Z-coordinate for all points.
+    returns:
+        np.ndarray: Array of shape (num_points, 3) with [x, y, z] coordinates.  
+    """
     t = np.linspace(0, 2 * np.pi, num_points, endpoint=False)
     x = a * np.cos(t) + center[0]
     y = b * np.sin(t) + center[1]

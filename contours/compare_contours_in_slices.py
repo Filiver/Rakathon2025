@@ -15,6 +15,16 @@ def load_points_from_pkl(filepath):
 
 
 def filter_by_z(points1, points2):
+    """
+    Filter points by z coordinate and group them into slices.
+    Parameters:
+
+        points1 (np.ndarray): First set of points with shape (N, 3).
+        points2 (np.ndarray): Second set of points with shape (M, 3).
+
+    Returns:
+        tuple: Two dictionaries where keys are unique z-values and values are points grouped by z.
+    """
     # Extract the z-values (assuming they're whole numbers already)
     z_slices1 = points1[:, 2]
     z_slices2 = points2[:, 2]
@@ -30,7 +40,7 @@ def filter_by_z(points1, points2):
     return slices1, slices2
 
 
-def round_z_coordinates_tensor(points, method="round"):
+def round_z_coordinates_tensor(points, method="floor"):
     """
     Round or floor the z-coordinates of the points in a tensor to the nearest whole number.
 
@@ -87,7 +97,7 @@ def compare_contour_slices(points1, points2, threshold=2.0):
     """
     Compare two sets of 3D points in the same z-slice and check if local shift exceeds threshold.
 
-    Args:
+        Parameters:
         points1: (N, 3) array-like, reference contour.
         points2: (M, 3) array-like, measured contour.
         threshold: float, distance in mm to flag as significant shift.
@@ -116,7 +126,7 @@ def compare_contour_slices_2d(points1, points2, origin_zyx, spacing_zyx, depth, 
     """
     Compare two sets of 2D points in the same slice and check if local shift exceeds threshold.
 
-    Args:
+    Parameters:
         points1: (N, 2) array-like, reference contour.
         points2: (M, 2) array-like, measured contour.
         threshold: float, distance in mm to flag as significant shift.
@@ -286,9 +296,6 @@ def visualize_comparison(points1, points2, problem_points, filepath="comparison_
     ax.legend()
     plt.savefig(filepath)
     plt.close()
-
-
-def compare_all_contours(contours_orig, contours_transf): ...
 
 
 if __name__ == "__main__":

@@ -44,6 +44,7 @@ def load_contours(file1: str, file2: str) -> Tuple[np.ndarray, np.ndarray]:
 
     contour1 = parse_file(file1)
     contour2 = parse_file(file2)
+
     return contour1, contour2
 
 
@@ -75,7 +76,7 @@ def plot_contours_3d(points_a: np.ndarray, points_b: np.ndarray, output_file: st
     plt.close()
 
 
-def compute_point_to_point_distance_3d(contour_a: np.ndarray, contour_b: np.ndarray, threshold: float):
+def compute_point_to_point_distance_3d(contour_a: np.ndarray, contour_b: np.ndarray, threshold: float = 3.0) -> dict:
     """
     Compute point-to-point distances between two 3D point clouds and report statistics.
 
@@ -105,7 +106,7 @@ def compute_point_to_point_distance_3d(contour_a: np.ndarray, contour_b: np.ndar
     return {"mean_distance": mean_distance, "max_distance": max_distance, "percentage_above_threshold": percentage_above_threshold}
 
 
-def find_neighbors(seed_point, contour, radius: float) -> np.ndarray:
+def find_neighbors(seed_point: np.ndarray, contour: np.ndarray, radius: float) -> np.ndarray:
     """
     Finds points within a given radius of the seed point.
     """
@@ -118,10 +119,11 @@ def find_neighbors(seed_point, contour, radius: float) -> np.ndarray:
     return indices
 
 
-def segment_contour_by_proximity(contour, radius=1.0) -> list:
+def segment_contour_by_proximity(contour: np.ndarray, radius:float = 1.0) -> list[list[int]]:
     """
     Segments the contour into regions based on proximity.
     The function iteratively selects seed points and finds neighboring points within a radius.
+    Returns a list of segments, where each segment is a list of indices into the original contour.
     """
     n = len(contour)
     unvisited = set(range(n))  # Set of all unvisited points
@@ -147,7 +149,7 @@ def segment_contour_by_proximity(contour, radius=1.0) -> list:
     return segments
 
 
-def plot_segments(contour, segments, output_file: str):
+def plot_segments(contour: np.ndarray, segments: list[list[int]], output_file: str):
     """
     Plots the contour points in 3D, with each segment in a different random color.
     Saves the plot to a file.
@@ -160,13 +162,11 @@ def plot_segments(contour, segments, output_file: str):
         segment_points = contour[segment]
 
         # Generate a random color for each segment
-        color = np.random.rand(
-            3,
-        )
+        color = np.random.rand(3,)
 
         ax.scatter(segment_points[:, 0], segment_points[:, 1], segment_points[:, 2], color=color.tolist(), label=f"Segment {i + 1}")
 
-    ax.set_xlabel("X")
+    ax.set_xlabel("X") 
     ax.set_ylabel("Y")
     ax.set_zlabel("Z")
     ax.set_title("Contour Segmentation")
@@ -176,9 +176,10 @@ def plot_segments(contour, segments, output_file: str):
     plt.savefig(output_file)
 
 
-def visualize_segment_difference(segment, contour1, contour2, output_file: str):
+def visualize_segment_difference(segment: list[int], contour1: np.ndarray, contour2: np.ndarray, output_file: str):
     """
-    Visualizes the difference between two segments from different contours.
+    Visualizes the difference between one segment from two different contours.
+    Saves the plot to a file.
     """
     fig = plt.figure()
     ax = fig.add_subplot(111, projection="3d")
@@ -199,7 +200,7 @@ def visualize_segment_difference(segment, contour1, contour2, output_file: str):
     plt.savefig(output_file)
 
 
-def hausdorff_distance_segment(segment1, segment2, contour1, contour2) -> float:
+def hausdorff_distance_segment(segment1: list[int], segment2: list[int], contour1: np.ndarray, contour2: np.ndarray) -> float:
     """
     Calculates the Hausdorff distance for a pair of segments.
     """
@@ -215,7 +216,7 @@ def hausdorff_distance_segment(segment1, segment2, contour1, contour2) -> float:
     return hausdorff
 
 
-def localized_hausdorff_distance(contour1, contour2, segments1, segments2, threshold: float) -> Tuple[float, float, list]:
+def localized_hausdorff_distance(contour1: np.ndarray, contour2: np.ndarray, segments1: np.ndarray, segments2: np.ndarray, threshold: float) -> Tuple[float, float, list]:
     """
     Calculates the localized Hausdorff distance for corresponding segments between two contours.
     Returns the mean, max Hausdorff distance, and segments exceeding the threshold.
@@ -240,12 +241,22 @@ def localized_hausdorff_distance(contour1, contour2, segments1, segments2, thres
     return mean_hausdorff, max_hausdorff, problematic_segments
 
 
-def tetrahedron_volume(p1, p2, p3, p4) -> float:
+def tetrahedron_volume(p1: np.ndarray, p2: np.ndarray, p3: np.ndarray, p4: np.ndarray) -> float:
+    def tetrahedron_volume(p1: np.ndarray, p2: np.ndarray, p3: np.ndarray, p4: np.ndarray) -> float:
+        """
+        Calculate the volume of a tetrahedron using the determinant given its four vertices in 3D space.
+
+        Returns:
+        float: The absolute volume of the tetrahedron.
+        """
     # Using the determinant method to calculate the volume of the tetrahedron
     return abs(np.dot(p1 - p4, np.cross(p2 - p4, p3 - p4))) / 6.0
 
 
-def calculate_volume(contour) -> float:
+def calculate_volume(contour: np.ndarray) -> float:
+    """
+    Calculate the volume of a 3D contour using Delaunay triangulation.
+    """
     # Perform Delaunay triangulation on the contour
     delaunay = Delaunay(contour)
 
@@ -259,8 +270,10 @@ def calculate_volume(contour) -> float:
     return total_volume
 
 
-def compare_contours(c1, c2, threshold: float) -> dict:
-    # print(f"Using threshold: {threshold} mm")
+def compare_contours(c1: np.ndarray, c2: np.ndarray, threshold: float) -> dict:
+    """
+    Compare two 3D contours and compute various metrics.
+    """
 
     ptpd = compute_point_to_point_distance_3d(c1, c2, threshold)
     segments = segment_contour_by_proximity(c1, radius=contour_segmentation_radius)
@@ -273,14 +286,7 @@ def compare_contours(c1, c2, threshold: float) -> dict:
         print("Warning: No segments with >= 10 points found. Skipping localized Hausdorff distance calculation.")
         mean_hd, max_hd, problematic_segments = 0, 0, []
     else:
-        # Use the filtered segments for visualization and distance calculation
-        # Note: visualize_segment_difference might need adjustment if segment indices change
-        # For now, let's visualize the first valid segment if it exists
         mean_hd, max_hd, problematic_segments = localized_hausdorff_distance(c1, c2, filtered_segments, filtered_segments, threshold)
-        # visualize_segment_difference(segments[problematic_segments[0]], c1, c2, 'segment_difference.png')
-        # print(len(problematic_segments[0]), "points in the problematic segment")
-
-    # plot_segments(c1, filtered_segments, 'segmented_contour.png') # Use filtered_segments if plotting
 
     volume_diff = calculate_volume(c1) - calculate_volume(c2)
 
@@ -297,6 +303,10 @@ def compare_contours(c1, c2, threshold: float) -> dict:
 
 
 def check_contours(c1, c2, type: str, log: bool = False, print_comparison: bool = False) -> Tuple[int, list]:
+    """
+    Check the contours and return the alert level and reasons fot the alert. Threshold is set accorning to the type of contour.
+    If log is True, treatment check and result is added to the log file.
+    """
     threshold = None
 
     if type.startswith("gtv"):
@@ -348,7 +358,7 @@ def check_contours(c1, c2, type: str, log: bool = False, print_comparison: bool 
     return alert_level, reasons
 
 
-def check_all_contours(contours_dict_ref, contours_meas_torch_dict):
+def check_all_contours(contours_dict_ref: dict, contours_meas_torch_dict: dict) -> dict:
     output = {}
     for contour_name, contour_points in contours_dict_ref.items():
         contour_meas_points = contours_meas_torch_dict[contour_name]

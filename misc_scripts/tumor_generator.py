@@ -1,5 +1,3 @@
-# tumor_sphere_generator.py
-
 import numpy as np
 
 def generate_sphere(num_points=1000) -> np.ndarray:
@@ -28,7 +26,7 @@ def generate_sphere(num_points=1000) -> np.ndarray:
     return np.column_stack((x, y, z))
 
 
-def generate_biconcave_shape_from_sphere(sphere_points: np.ndarray, deformation_scale=0.3) -> np.ndarray:
+def generate_biconcave_shape_from_sphere(sphere_points: np.ndarray = None, deformation_scale=0.3) -> np.ndarray:
     """
     Generate 3D points on a biconcave shape (like a red blood cell) based on an input set of points on a sphere.
     
@@ -39,6 +37,10 @@ def generate_biconcave_shape_from_sphere(sphere_points: np.ndarray, deformation_
     Returns:
         np.ndarray: Array of shape (N, 3) with [x, y, z] coordinates on the deformed biconcave shape.
     """
+    # Generate a default sphere if none provided
+    if sphere_points is None:
+        sphere_points = generate_sphere(num_points=1000)
+
     # Copy original sphere points to apply deformation
     deformed_points = sphere_points.copy()
 
